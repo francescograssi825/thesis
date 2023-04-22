@@ -8,7 +8,7 @@ from consumption_and_emissions_csv_utils import generate_mock_emissions
 
 def main():
     test_op = TrainOptimization(start_time='2018-01-10T00:00:00+00:00')
-    #test_op.launcher(end_time='2018-01-11T00:00:00+00:00', mode='compare', fts_run_duration=120)
+    #test_op.launcher(end_time='2018-01-11T00:00:00+00:00', mode='compare', fts_run_duration=5)
     #start = time.time()
 
 
