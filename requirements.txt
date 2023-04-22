@@ -39,3 +39,6 @@ urllib3==1.26.14
 Werkzeug==2.2.3
 wrapt==1.15.0
 zipp==3.15.0
+
+codecarbon~=2.1.4 
+matplotlib~=3.7.1

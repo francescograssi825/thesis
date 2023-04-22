@@ -3,6 +3,8 @@ import time
 from datetime import datetime, timedelta
 from operator import itemgetter
 import matplotlib.pyplot as p
+import numpy as np
+
 import consumption_and_emissions_csv_utils
 
 
@@ -13,23 +15,22 @@ class TrainOptimization:
         self.start_time = start_time
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
+        self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
 
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
         start_index = self.get_index_by_key(self.emissions, self.start_time)
         end_window = self.get_index_by_key(self.emissions, end_time) + 1
-        total_emissions = 0
+
         last_total_emissions = 0
         optimal_start_time = ''
         for start_window_index in range(start_index + 1, end_window):
             ranged_emissions = list(self.emissions.values())[start_window_index: start_window_index+len(self.workload_energy)]
-            for emission_index in range(len(self.workload_energy)):
-                total_emissions = ((self.workload_energy[emission_index]['total_consumption']) * ranged_emissions[emission_index]) + total_emissions
+            emissions_list = np.multiply(self.consumption_values, ranged_emissions)
+            total_emissions = sum(i for i in emissions_list)
             if last_total_emissions == 0 or total_emissions < last_total_emissions:
                 last_total_emissions = total_emissions
                 optimal_start_time = self.get_key_by_index(self.emissions, start_window_index)
-
-            total_emissions = 0
 
         optimal_emissions = last_total_emissions
         optimal_end_time = self.get_date_for_intervals(optimal_start_time, self.minimum_workload_len)
@@ -45,27 +46,22 @@ class TrainOptimization:
 
     def no_echo_mode(self, print_result=False):
         start_exc = time.time()
-        total_emission = {}
         start_index = self.get_index_by_key(self.emissions, self.start_time)
-        end_time = self.get_date_for_intervals(self.start_time, self.minimum_workload_len)
-        emission = 0
-        current_index = start_index
-        offset = 0
-        for consumption in self.workload_energy:
-            marginal_emission = self.get_value_by_index(self.emissions, current_index + offset)
-            emission = consumption["total_consumption"] * marginal_emission + emission
-            total_emission.update({self.start_time: emission})
-            offset += 1
-        strategy_duration = datetime.strptime(end_time, self.date_format_str) - datetime.strptime(self.start_time, self.date_format_str)
+        end_time_index = start_index + len(self.workload_energy)
+
+        final_emissions = np.multiply(self.consumption_values, list(self.emissions.values())[start_index + 1:end_time_index+1])
+        total_emission = sum(i for i in final_emissions)
+        strategy_duration = datetime.strptime(self.get_date_for_intervals(self.start_time, self.minimum_workload_len), self.date_format_str) - datetime.strptime(self.start_time, self.date_format_str)
+
         if print_result:
             print("\n-NO ECO MODE-")
             print(f"STARTING TIME: {self.start_time}")
-            print(f"EMISSIONS\t ---> \t{total_emission[self.start_time]} C02eq would been emitted")
+            print(f"EMISSIONS\t ---> \t{total_emission} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{strategy_duration}")
             end_exc = time.time()
             print("Execution time :", end_exc - start_exc)
 
-        return total_emission[self.start_time], strategy_duration.total_seconds()/60
+        return total_emission, strategy_duration.total_seconds()/60
 
     def pause_and_resume(self, end_time, region='csv_dir/region_emissions/CAISO_NORTH_2018-01_MOER.csv', print_result=False):
         start_exc = time.time()
@@ -73,25 +69,21 @@ class TrainOptimization:
             raise Exception(
                 f"PAUSE AND RESUME EXCEPTION: Minimum ending time required is {self.get_date_for_intervals(self.start_time, self.minimum_workload_len)} , but {end_time} is given")
 
-        interval_marginal_emissions = []
         start_index = list(self.emissions).index(self.start_time)
         end_index = list(self.emissions).index(end_time)
-        for em_index in range(start_index, end_index):
-            interval_marginal_emissions.append(
 
-                {
-                    'region': region.split("/")[2],
-                    'start_time': list(self.emissions.keys())[em_index],
-                    'end_time': list(self.emissions.keys())[em_index + 1],
-                    'marginal_emission': list(self.emissions.values())[em_index + 1],
-                }
-            )
-        sorted_interval_by_emissions = sorted(interval_marginal_emissions, key=itemgetter('marginal_emission'))[
-                                       :len(self.workload_energy)]
-        carbon_emission = 0
+        interval_marginal_emissions = [{
+                'region': region.split("/")[2],
+                'start_time': list(self.emissions.keys())[em_index],
+                'end_time': list(self.emissions.keys())[em_index + 1],
+                'marginal_emission': list(self.emissions.values())[em_index + 1]
+                 } for em_index in range(start_index, end_index)]
+
+        sorted_interval_by_emissions = sorted(interval_marginal_emissions, key=itemgetter('marginal_emission'))[:len(self.workload_energy)]
         sorted_interval_by_start = sorted(sorted_interval_by_emissions, key=itemgetter('start_time'))
-        for emission_index in range(len(sorted_interval_by_start)):
-            carbon_emission = carbon_emission + (sorted_interval_by_start[emission_index]['marginal_emission'] * self.workload_energy[emission_index]['total_consumption'])
+
+        emissions_list = [sorted_interval_by_start[emission_index]['marginal_emission'] * self.workload_energy[emission_index]['total_consumption'] for emission_index in range(len(sorted_interval_by_start))]
+        carbon_emission = sum(i for i in emissions_list)
 
         if print_result:
             print("\n -PAUSE AND RESUME-")
