@@ -17,6 +17,8 @@ class TrainOptimization:
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
 
+
+
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
         start_index = self.get_index_by_key(self.emissions, self.start_time)
