@@ -8,7 +8,8 @@ from consumption_and_emissions_csv_utils import generate_mock_emissions
 
 def main():
     test_op = TrainOptimization(start_time='2018-01-10T00:00:00+00:00')
-    #test_op.launcher(end_time='2018-01-11T00:00:00+00:00', mode='compare', fts_run_duration=5)
+    end_time = test_op.minimum_workload_len + (6*60)
+    test_op.launcher(end_time=test_op.get_date_for_intervals('2018-01-10T00:00:00+00:00', end_time), mode='compare', fts_run_duration=120)
     #start = time.time()
 
 
@@ -41,10 +42,10 @@ def main():
     #carbon_optimization_algorithms.follow_the_sun('2018-01-01T00:20:00+00:00', window_workload=10, data_transfer_time=0)
     #workload_algorithms.isolation_forrest()
 
-    run_len_set = [15, 30, 60, 90, 120]
+    run_len_set = [30, 60, 90, 120]
     for run_set in run_len_set:
         test_op.compute_graphics(run_set)
 
 
 if __name__ == "__main__":
-    main()
+     main()

@@ -27,9 +27,8 @@ class TrainOptimization:
         last_total_emissions = 0
         optimal_start_time = ''
         for start_window_index in range(start_index + 1, end_window):
-            ranged_emissions = list(self.emissions.values())[
-                               start_window_index: start_window_index + len(self.workload_energy)]
-            total_emissions = sum(i for i in np.multiply(self.consumption_values, ranged_emissions))
+            ranged_emissions = list(self.emissions.values())[start_window_index: start_window_index + len(self.workload_energy)]
+            total_emissions = np.asarray(self.consumption_values).dot(np.asarray(ranged_emissions))
             if last_total_emissions == 0 or total_emissions < last_total_emissions:
                 last_total_emissions = total_emissions
                 optimal_start_time = self.get_key_by_index(self.emissions, start_window_index)
@@ -212,10 +211,12 @@ class TrainOptimization:
         Compute emissions choosing the 5 min intervals withe the lowest marginal emissions between different regions.
         The time to transfer the computation must be considered
         """
+
+
         start_exc = time.time()
         regions = consumption_and_emissions_csv_utils.list_all_area()
         regions_emissions = {}
-        taken_intervals = {}
+        #taken_intervals = {}
         best_intervals = []
         run_len = run_duration // 5
 
@@ -225,48 +226,49 @@ class TrainOptimization:
         for region in regions:
             regions_emissions.update({region: consumption_and_emissions_csv_utils.get_emissions_from_csv(
                 file_path=f"csv_dir/region_emissions/{region}", mode='dict')})
+        #TODO REMOVE
+        #regions_emissions.update({"CAISO_NORTH_2018-01_MOER.csv": self.emissions})
 
         start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
-        end_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), end_time)
-        last_start_window_index = end_window_index - len(self.workload_energy)
+        #end_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), end_time)
+        end_window_index = self.get_index_by_key(self.emissions, end_time)
+        #last_start_window_index = end_window_index - len(self.workload_energy)
 
-        for start_window_index in range(start_window_index, last_start_window_index + 1):
+        for start_window_index in range(start_window_index, end_window_index):
             """ Loop to try every starting time """
             interval_end_index = start_window_index
             intervals = []
-
+            consumption_start_index = 0
             for interval_len in intervals_len:
                 """ Loop to compose the train by the intervals picked from the regions with lowest marginal emissions """
                 last_interval = {}
+                consumption_end_index = consumption_start_index + interval_len
                 interval_start_index = interval_end_index
                 interval_end_index = interval_start_index + interval_len
                 id_interval = self.compute_id_interval(interval_start_index, interval_end_index)
-                if id_interval not in taken_intervals:
-                    for region_name, region_list in regions_emissions.items():
-                        """ Loop to get the best interval with size specified in interval_len """
-                        interval = self.group_intervals(interval_start_index, interval_end_index, region_list,
-                                                        region_name)
+                #if id_interval not in taken_intervals:
+                for region_name, region_list in regions_emissions.items():
+                    """ Loop to get the best interval with size specified in interval_len """
+                    em_list = np.asarray(list(regions_emissions[region_name].values())[interval_start_index+1:interval_end_index+1])
+                    interval = {
+                                        'start_time': self.get_key_by_index(regions_emissions[region_name], interval_start_index),
+                                        'end_time': self.get_key_by_index(regions_emissions[region_name], interval_end_index),
+                                        'emission': np.asarray(em_list).dot(np.asarray(self.consumption_values[consumption_start_index:consumption_end_index])),
+                                        'region': region_name
+                                    }
 
-                        if last_interval == {} or interval['marginal_emission'] < last_interval['marginal_emission']:
-                            last_interval = interval
-                    taken_intervals.update(
-                        {self.compute_id_interval(interval_start_index, interval_end_index): last_interval})
-                else:
-                    last_interval = taken_intervals[id_interval]
+                    if last_interval == {} or interval['emission'] < last_interval['emission']:
+                        last_interval = interval
+                #taken_intervals.update({self.compute_id_interval(interval_start_index, interval_end_index): last_interval})
+
+
                 intervals.append(last_interval)
-            if best_intervals == [] or sum(item['marginal_emission'] for item in intervals) < sum(
-                    item['marginal_emission'] for item in best_intervals):
+                consumption_start_index = consumption_end_index
+            if best_intervals == [] or sum(item['emission'] for item in intervals) < sum(item['emission'] for item in best_intervals):
                 best_intervals = intervals.copy()
 
-        selected_intervals = []
-        for big_interval in best_intervals:
-            current_region = big_interval['region']
-            s_index = self.get_index_by_key(regions_emissions[current_region], big_interval['start_time'])
-            e_index = self.get_index_by_key(regions_emissions[current_region], big_interval['end_time'])
-            selected_intervals = selected_intervals + list(regions_emissions[current_region].values())[
-                                                      s_index + 1:e_index + 1]
 
-        total_emissions = sum(i for i in np.multiply(self.consumption_values, selected_intervals))
+        total_emissions = sum(i['emission'] for i in best_intervals)
 
         if print_result:
             print("\n-FOLLOW THE SUN OPTIMIZED-")
@@ -291,11 +293,11 @@ class TrainOptimization:
                 no_echo = self.no_echo_mode()
                 f_start = self.flexible_start(end_time=end_time, print_result=print_result)
                 p_and_r = self.pause_and_resume(end_time=end_time, print_result=print_result)
-                f_the_sun = self.follow_the_sun(end_time=end_time, print_result=print_result,
-                                                run_duration=fts_run_duration)
+                #f_the_sun = self.follow_the_sun(end_time=end_time, print_result=print_result,
+                                               # run_duration=fts_run_duration)
                 f_the_sun_optimized = self.follow_the_sun_optimized(end_time=end_time, print_result=print_result,
                                                                     run_duration=fts_run_duration)
-                return no_echo, f_start, p_and_r, f_the_sun, f_the_sun_optimized
+                return no_echo, f_start, p_and_r, f_the_sun_optimized
         except Exception as ex:
             raise ex
 
