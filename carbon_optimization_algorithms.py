@@ -16,6 +16,7 @@ class TrainOptimization:
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
+        self.energy_consumption_per_GB = 0.23  #Kwh/Gb
 
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
