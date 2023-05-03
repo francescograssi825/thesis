@@ -8,8 +8,11 @@ from consumption_and_emissions_csv_utils import generate_mock_emissions
 
 def main():
     test_op = TrainOptimization(start_time='2018-01-10T00:00:00+00:00')
-    end_time = test_op.minimum_workload_len + (6*60)
-    test_op.launcher(end_time=test_op.get_date_for_intervals('2018-01-10T00:00:00+00:00', end_time), mode='compare', fts_run_duration=120)
+    end_time = test_op.get_date_for_intervals('2018-01-10T00:00:00+00:00', test_op.minimum_workload_len + (6*60))
+    #test_op.launcher(end_time=test_op.get_date_for_intervals('2018-01-10T00:00:00+00:00', end_time), mode='compare', fts_run_duration=120)
+    pause_and_resume_list = test_op.pause_and_resume(end_time=end_time)[0]
+    follow_the_sun = test_op.follow_the_sun_optimized(end_time=end_time)[0]
+    flexible_start = test_op.flexible_start(end_time=end_time)[0]
     #start = time.time()
 
 
@@ -42,9 +45,10 @@ def main():
     #carbon_optimization_algorithms.follow_the_sun('2018-01-01T00:20:00+00:00', window_workload=10, data_transfer_time=0)
     #workload_algorithms.isolation_forrest()
 
-    run_len_set = [30, 60, 90, 120]
-    for run_set in run_len_set:
-        test_op.compute_graphics(run_set)
+    # run_len_set = [30, 60, 90, 120]
+    # for run_set in run_len_set:
+    #     test_op.compute_graphics(run_set)
+    test_op.timeline_graph(fts_intervals=follow_the_sun, pause_resume_intervals=pause_and_resume_list, flexible_start_start=flexible_start)
 
 
 if __name__ == "__main__":

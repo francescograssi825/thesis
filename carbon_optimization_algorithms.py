@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 from operator import itemgetter
 import matplotlib.pyplot as p
 import numpy as np
+import sys
+
+sys.path.insert(0, 'venv/lib/python3.8/site-packages/plotly')
 
 import consumption_and_emissions_csv_utils
 
@@ -16,7 +19,7 @@ class TrainOptimization:
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
-        self.energy_consumption_per_GB = 0.23  #Kwh/Gb
+        self.energy_consumption_per_GB = 0.23  # Kwh/Gb
 
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
@@ -110,6 +113,10 @@ class TrainOptimization:
         strategy_duration = datetime.strptime(best_intervals[-1]['end_time'], self.date_format_str) - datetime.strptime(
             best_intervals[0]['start_time'], self.date_format_str)
         return strategy_duration.total_seconds() / 60
+
+    def get_time_delta_from_dates(self, start_date, end_date):
+        return (datetime.strptime(end_date, self.date_format_str) - datetime.strptime(start_date,
+                                                                                      self.date_format_str)).total_seconds() // 5
 
     def get_date_for_intervals(self, string_date, delta):
         string_to_date = datetime.strptime(string_date, self.date_format_str) + timedelta(
@@ -217,10 +224,12 @@ class TrainOptimization:
         regions_emissions = {}
         best_intervals = []
         run_len = run_duration // 5
-        intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len) for i in range(math.ceil(len(self.workload_energy) / run_len))]
+        intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
+                         for i in range(math.ceil(len(self.workload_energy) / run_len))]
 
         for region in regions:
-            regions_emissions.update({region: consumption_and_emissions_csv_utils.get_emissions_from_csv(file_path=f"csv_dir/region_emissions/{region}", mode='dict')})
+            regions_emissions.update({region: consumption_and_emissions_csv_utils.get_emissions_from_csv(
+                file_path=f"csv_dir/region_emissions/{region}", mode='dict')})
 
         start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
         end_window_index = self.get_index_by_key(self.emissions, end_time)
@@ -243,7 +252,8 @@ class TrainOptimization:
                     interval = {
                         'start_time': self.get_key_by_index(regions_emissions[region_name], interval_start_index),
                         'end_time': self.get_key_by_index(regions_emissions[region_name], interval_end_index),
-                        'emission': np.asarray(em_list).dot(np.asarray(self.consumption_values[consumption_start_index:consumption_end_index])),
+                        'emission': np.asarray(em_list).dot(
+                            np.asarray(self.consumption_values[consumption_start_index:consumption_end_index])),
                         'region': region_name
                     }
 
@@ -252,7 +262,8 @@ class TrainOptimization:
 
                 intervals.append(last_interval)
                 consumption_start_index = consumption_end_index
-            if best_intervals == [] or sum(item['emission'] for item in intervals) < sum(item['emission'] for item in best_intervals):
+            if best_intervals == [] or sum(item['emission'] for item in intervals) < sum(
+                    item['emission'] for item in best_intervals):
                 best_intervals = intervals.copy()
 
         total_emissions = sum(i['emission'] for i in best_intervals)
@@ -361,21 +372,65 @@ class TrainOptimization:
         p.tight_layout()
         p.show()
 
-        """ LINE  PLOT  DURATION """
-        p.plot(strategy_consumption['follow_the_sun']['end_time'], strategy_consumption['follow_the_sun']['duration'],
-               label='follow the sun', linewidth=3, linestyle='solid')
-        p.plot(strategy_consumption['flexible_start']['end_time'], strategy_consumption['flexible_start']['duration'],
-               label='flexible start', linewidth=3, linestyle='dotted')
-        p.plot(strategy_consumption['pause_and_resume']['end_time'],
-               strategy_consumption['pause_and_resume']['duration'], label='pause_and_resume', linewidth=2,
-               linestyle='dashed')
-        p.plot(strategy_consumption['no_echo_mode']['end_time'], strategy_consumption['no_echo_mode']['duration'],
-               label='no_echo', linewidth=1, linestyle='dashdot')
+        # """ LINE  PLOT  DURATION """
+        # p.plot(strategy_consumption['follow_the_sun']['end_time'], strategy_consumption['follow_the_sun']['duration'],
+        #        label='follow the sun', linewidth=3, linestyle='solid')
+        # p.plot(strategy_consumption['flexible_start']['end_time'], strategy_consumption['flexible_start']['duration'],
+        #        label='flexible start', linewidth=3, linestyle='dotted')
+        # p.plot(strategy_consumption['pause_and_resume']['end_time'],
+        #        strategy_consumption['pause_and_resume']['duration'], label='pause_and_resume', linewidth=2,
+        #        linestyle='dashed')
+        # p.plot(strategy_consumption['no_echo_mode']['end_time'], strategy_consumption['no_echo_mode']['duration'],
+        #        label='no_echo', linewidth=1, linestyle='dashdot')
+        #
+        # p.xlabel('Window end time', fontsize=9)
+        # p.ylabel('Duration in minutes', fontsize=9)
+        # p.legend()
+        # p.title("Train duration for different time-window ")
+        # p.xticks(rotation=45, fontsize=9)
+        # p.tight_layout()
+        # p.show()
 
-        p.xlabel('Window end time', fontsize=9)
-        p.ylabel('Duration in minutes', fontsize=9)
-        p.legend()
-        p.title("Train duration for different time-window ")
-        p.xticks(rotation=45, fontsize=9)
+    def to_timestamp(self, date: str):
+        return int(datetime.timestamp(datetime.strptime(date, self.date_format_str)))
+
+    def to_datetime(self, date: str):
+        return datetime.strptime(date, self.date_format_str)
+
+    def timeline_graph(self, fts_intervals: list, pause_resume_intervals: list, flexible_start_start: str):
+
+        fts_start_timestamp = self.to_timestamp(fts_intervals[0]['start_time'])
+        fts_end_timestamp = self.to_timestamp(fts_intervals[-1]['end_time'])
+        fts_end_datetime = self.to_datetime(fts_intervals[-1]['end_time'])
+
+        pause_resume_end_datetime = self.to_datetime(pause_resume_intervals[-1]['end_time'])
+
+        fs_start_timestamp = self.to_timestamp(flexible_start_start)
+        fs_end_timestamp = self.to_timestamp(
+            self.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
+        fs_end_datetime = self.to_datetime(self.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
+
+        end_datetime = max(fts_end_datetime, pause_resume_end_datetime, fs_end_datetime)
+
+        start_date_index = self.get_index_by_key(self.emissions, self.start_time)
+        end_date_index = self.get_index_by_key(self.emissions, datetime.strftime(end_datetime, self.date_format_str).replace('+0000', '+00:00'))
+        date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
+        timestamp_list = [self.to_timestamp(i) for i in date_list]
+
+        fts_list = [(fts_start_timestamp, fts_end_timestamp - fts_start_timestamp)]
+        fs_list = [(fs_start_timestamp, fs_end_timestamp - fs_start_timestamp)]
+        p_r_list = [(self.to_timestamp(i['start_time']), 300) for i in pause_resume_intervals] # 300 because is 5 min in sec
+
+        fig, ax = p.subplots()
+        ax.broken_barh(fts_list, (10, 9), facecolors='tab:blue')
+        ax.broken_barh(p_r_list, (20, 9), facecolors='tab:orange')
+        ax.broken_barh(fs_list, (30, 9), facecolors='tab:red')
+        ax.set_ylim(5, 50)
+
+        p.xticks(ticks=timestamp_list, labels=date_list, fontsize=7, rotation=90)
+        ax.set_xlabel('seconds since start')
+        ax.set_yticks([15, 25, 35], labels=['fts', 'p&r', 'fs'])  # Modify y-axis tick labels
+        ax.grid(True)  # Make grid lines visible
+
         p.tight_layout()
         p.show()
