@@ -1,28 +1,14 @@
 import csv
 import os
 import random
-
-from codecarbon import EmissionsTracker
 import watt_time_controller
 
 watt_time = watt_time_controller.WattTimeController()
+libs_to_grams = 453.59
+mega_to_kilowatt_hours = 1000
 
-tracker = EmissionsTracker(measure_power_secs=5 * 60, tracking_mode='process')
-
-
-def write_to_csv_workload_consumption():
-    if os.path.exists('csv_dir/Custom_Consumption.csv'):
-        os.remove('csv_dir/Custom_Consumption.csv')
-
-
-    print('-Start tracking energy consumption-')
-    tracker.start()
-    os.system("/Users/alessioerrico/Desktop/Tesi/Workload/main.py")
-    tracker.stop()
-
-
-def get_workload_energy_consumption_from_csv():
-    with open("csv_dir/Custom_Consumption.csv", 'r') as csv_consumption:
+def get_workload_energy_consumption_from_csv(workload: str):
+    with open(f"csv_dir/{workload}_consumption.csv", 'r') as csv_consumption:
         dict_reader = csv.DictReader(csv_consumption)
         return [{'timestamp': i['timestamp'],
                  'cpu_energy_consumed': float(i['cpu_energy_consumed']),
@@ -37,10 +23,8 @@ def get_emissions_from_csv(file_path='csv_dir/region_emissions/CAISO_NORTH_2018-
         if mode == 'list_of_dict':
             return list(dict_reader)
         if mode == 'dict':
-            dictionary = {}
-            for row in dict_reader:
-                dictionary.update({row['timestamp']: float(row['MOER'])})
-            return dictionary
+            return {row['timestamp']: float(row['MOER']) * (libs_to_grams / mega_to_kilowatt_hours) for row in dict_reader}
+
 
 
 def generate_mock_emissions(region_number):
