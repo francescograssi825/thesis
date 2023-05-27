@@ -7,23 +7,23 @@ from statistics import mean
 
 from matplotlib import pyplot as plt
 import numpy as np
-import consumption_and_emissions_csv_utils
+from consumption_and_emissions_csv_utils import  ConsumptionAndEmissionsCsvUtils
 
 
 class TrainOptimization:
-    def __init__(self, start_time, workload, regions="other_regions"):
-        self.workload_energy = consumption_and_emissions_csv_utils.get_workload_energy_consumption_from_csv(workload)
+    def __init__(self, start_time, workload, region_zone="other_regions"):
+        self.csv_utils = ConsumptionAndEmissionsCsvUtils(region_zone=region_zone)
+        self.workload_energy = self.csv_utils.get_workload_energy_consumption_from_csv(workload)
         self.workload = workload
-        self.csv_regions = regions
-        self.emissions = consumption_and_emissions_csv_utils.get_emissions_from_csv(mode='dict', regions= self.csv_regions)
+        self.csv_region_zone = region_zone
+        self.emissions = self.csv_utils.get_emissions_from_csv(mode='dict')
         self.start_time = start_time
         self.minimum_workload_len = 5 * len(self.workload_energy)
-        self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
         self.kwH_per_GB = 0.028  # Kwh/Gb
         self.dataset_dim = 0.1  # Gb
         self.kwH_for_dataset = self.kwH_per_GB * self.dataset_dim
-        self.reference_region = 'CAISO_NORTH_2018-01_MOER.csv' if self.csv_regions == "other_regions" else "IT-SO.csv"
+        self.reference_region = self.csv_utils.reference_region[region_zone]["reference_name"]
 
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
@@ -41,9 +41,9 @@ class TrainOptimization:
                 optimal_start_time = self.get_key_by_index(self.emissions, start_window_index)
 
         optimal_emissions = last_total_emissions
-        optimal_end_time = self.get_date_for_intervals(optimal_start_time, self.minimum_workload_len)
-        strategy_duration = datetime.strptime(optimal_end_time, self.date_format_str) - datetime.strptime(
-            optimal_start_time, self.date_format_str)
+        optimal_end_time = self.csv_utils.get_date_for_intervals(optimal_start_time, self.minimum_workload_len)
+        strategy_duration = datetime.strptime(optimal_end_time, self.csv_utils.date_format_str) - datetime.strptime(
+            optimal_start_time, self.csv_utils.date_format_str)
         if print_result:
             print("\n -FLEXIBLE START-")
             print(f"OPTIMAL STARTING TIME: {optimal_start_time}")
@@ -59,9 +59,9 @@ class TrainOptimization:
         end_time_index = start_index + len(self.workload_energy)
         total_emission = sum(i for i in np.multiply(self.consumption_values,
                                                     list(self.emissions.values())[start_index + 1:end_time_index + 1]))
-        strategy_duration = datetime.strptime(self.get_date_for_intervals(self.start_time, self.minimum_workload_len),
-                                              self.date_format_str) - datetime.strptime(self.start_time,
-                                                                                        self.date_format_str)
+        strategy_duration = datetime.strptime(self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len),
+                                              self.csv_utils.date_format_str) - datetime.strptime(self.start_time,
+                                                                                        self.csv_utils.date_format_str)
 
         if print_result:
             print("\n-NO ECO MODE-")
@@ -76,9 +76,9 @@ class TrainOptimization:
     def pause_and_resume(self, end_time, region='csv_dir/region_emissions/CAISO_NORTH_2018-01_MOER.csv',
                          print_result=False):
         start_exc = time.time()
-        if self.get_date_for_intervals(self.start_time, self.minimum_workload_len) > end_time:
+        if self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len) > end_time:
             raise Exception(
-                f"PAUSE AND RESUME EXCEPTION: Minimum ending time required is {self.get_date_for_intervals(self.start_time, self.minimum_workload_len)} , but {end_time} is given")
+                f"PAUSE AND RESUME EXCEPTION: Minimum ending time required is {self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len)} , but {end_time} is given")
 
         start_index = list(self.emissions).index(self.start_time)
         end_index = list(self.emissions).index(end_time)
@@ -114,18 +114,13 @@ class TrainOptimization:
         return list(dictionary).index(key)
 
     def strategy_duration(self, best_intervals):
-        strategy_duration = datetime.strptime(best_intervals[-1]['end_time'], self.date_format_str) - datetime.strptime(
-            best_intervals[0]['start_time'], self.date_format_str)
+        strategy_duration = datetime.strptime(best_intervals[-1]['end_time'], self.csv_utils.date_format_str) - datetime.strptime(
+            best_intervals[0]['start_time'], self.csv_utils.date_format_str)
         return strategy_duration.total_seconds() / 60
 
-    def get_time_delta_from_dates(self, start_date, end_date):
-        return (datetime.strptime(end_date, self.date_format_str) - datetime.strptime(start_date,
-                                                                                      self.date_format_str)).total_seconds() // 5
 
-    def get_date_for_intervals(self, string_date, delta):
-        string_to_date = datetime.strptime(string_date, self.date_format_str) + timedelta(
-            minutes=delta)
-        return datetime.strftime(string_to_date, self.date_format_str).replace('+0000', '+00:00')
+
+
 
     @staticmethod
     def get_key_by_index(dictionary, index):
@@ -184,16 +179,12 @@ class TrainOptimization:
         """
 
         start_exc = time.time()
-        regions = consumption_and_emissions_csv_utils.list_all_area(regions=self.csv_regions)
-        regions_emissions = {}
+        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone()
         best_intervals = []
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
-        file_path = "csv_dir/region_emissions" if self.csv_regions == "other_regions" else "csv_dir/italy_csv"
-        for region in regions:
-            regions_emissions.update({region: consumption_and_emissions_csv_utils.get_emissions_from_csv(
-                file_path=f"{file_path}/{region}", mode='dict', regions=self.csv_regions)})
+
 
         start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
         end_window_index = self.get_index_by_key(self.emissions, end_time)
@@ -246,7 +237,6 @@ class TrainOptimization:
 
     def static_start_follow_the_sun(self, print_result=False, run_duration=5):
 
-        regions = consumption_and_emissions_csv_utils.list_all_area(regions=self.csv_regions)
 
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
@@ -255,9 +245,7 @@ class TrainOptimization:
         start_time_index = self.get_index_by_key(self.emissions, self.start_time)
         selected_intervals = []
 
-        file_path = "csv_dir/region_emissions" if self.csv_regions == "other_regions" else "csv_dir/italy_csv"
-        regions_emissions = {region: consumption_and_emissions_csv_utils.get_emissions_from_csv(file_path=f"{file_path}/{region}", mode='dict', regions=self.csv_regions) for region in regions}
-
+        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone()
         emission_start_index = start_time_index
         consumption_start_index = 0
         for interval_len in intervals_len:
@@ -349,7 +337,7 @@ class TrainOptimization:
         end_windows_set = [6, 12,18, 24]
         ending_time_list = []
         for t in end_windows_set:
-            ending_time_list.append(self.get_date_for_intervals(self.start_time, (t * 60) + self.minimum_workload_len))
+            ending_time_list.append(self.csv_utils.get_date_for_intervals(self.start_time, (t * 60) + self.minimum_workload_len))
         strategy_consumption = {
             'flexible_start':
                 {
@@ -492,10 +480,10 @@ class TrainOptimization:
 
 
     def to_timestamp(self, date: str):
-        return int(datetime.timestamp(datetime.strptime(date, self.date_format_str)))
+        return int(datetime.timestamp(datetime.strptime(date, self.csv_utils.date_format_str)))
 
     def to_datetime(self, date: str):
-        return datetime.strptime(date, self.date_format_str)
+        return datetime.strptime(date, self.csv_utils.date_format_str)
 
     def timeline_graph(self, flexible_fts_intervals: list, static_start_fts_intervals: list,
                        pause_resume_intervals: list, flexible_start_start: str, run_len,
@@ -513,15 +501,15 @@ class TrainOptimization:
 
         fs_start_timestamp = self.to_timestamp(flexible_start_start)
         fs_end_timestamp = self.to_timestamp(
-            self.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
-        fs_end_datetime = self.to_datetime(self.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
+            self.csv_utils.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
+        fs_end_datetime = self.to_datetime(self.csv_utils.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
 
         end_datetime = max(flexible_fts_end_datetime, static_start_fts_end_datetime, pause_resume_end_datetime,
                            fs_end_datetime)
 
         start_date_index = self.get_index_by_key(self.emissions, self.start_time)
         end_date_index = self.get_index_by_key(self.emissions,
-                                               datetime.strftime(end_datetime, self.date_format_str).replace('+0000',
+                                               datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace('+0000',
                                                                                                              '+00:00'))
         date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
         timestamp_list = [self.to_timestamp(i) for i in date_list]
