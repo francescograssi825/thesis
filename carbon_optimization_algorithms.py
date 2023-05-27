@@ -11,10 +11,11 @@ import consumption_and_emissions_csv_utils
 
 
 class TrainOptimization:
-    def __init__(self, start_time, workload):
+    def __init__(self, start_time, workload, regions="other_regions"):
         self.workload_energy = consumption_and_emissions_csv_utils.get_workload_energy_consumption_from_csv(workload)
         self.workload = workload
-        self.emissions = consumption_and_emissions_csv_utils.get_emissions_from_csv(mode='dict')
+        self.csv_regions = regions
+        self.emissions = consumption_and_emissions_csv_utils.get_emissions_from_csv(mode='dict', regions= self.csv_regions)
         self.start_time = start_time
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
@@ -22,7 +23,7 @@ class TrainOptimization:
         self.kwH_per_GB = 0.028  # Kwh/Gb
         self.dataset_dim = 0.1  # Gb
         self.kwH_for_dataset = self.kwH_per_GB * self.dataset_dim
-        self.reference_region = 'CAISO_NORTH_2018-01_MOER.csv'
+        self.reference_region = 'CAISO_NORTH_2018-01_MOER.csv' if self.csv_regions == "other_regions" else "IT-SO.csv"
 
     def flexible_start(self, end_time, print_result=False):
         start_exc = time.time()
@@ -183,16 +184,16 @@ class TrainOptimization:
         """
 
         start_exc = time.time()
-        regions = consumption_and_emissions_csv_utils.list_all_area()
+        regions = consumption_and_emissions_csv_utils.list_all_area(regions=self.csv_regions)
         regions_emissions = {}
         best_intervals = []
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
-
+        file_path = "csv_dir/region_emissions" if self.csv_regions == "other_regions" else "csv_dir/italy_csv"
         for region in regions:
             regions_emissions.update({region: consumption_and_emissions_csv_utils.get_emissions_from_csv(
-                file_path=f"csv_dir/region_emissions/{region}", mode='dict')})
+                file_path=f"{file_path}/{region}", mode='dict', regions=self.csv_regions)})
 
         start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
         end_window_index = self.get_index_by_key(self.emissions, end_time)
@@ -245,7 +246,7 @@ class TrainOptimization:
 
     def static_start_follow_the_sun(self, print_result=False, run_duration=5):
 
-        regions = consumption_and_emissions_csv_utils.list_all_area()
+        regions = consumption_and_emissions_csv_utils.list_all_area(regions=self.csv_regions)
 
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
@@ -254,7 +255,8 @@ class TrainOptimization:
         start_time_index = self.get_index_by_key(self.emissions, self.start_time)
         selected_intervals = []
 
-        regions_emissions = {region: consumption_and_emissions_csv_utils.get_emissions_from_csv(file_path=f"csv_dir/region_emissions/{region}", mode='dict') for region in regions}
+        file_path = "csv_dir/region_emissions" if self.csv_regions == "other_regions" else "csv_dir/italy_csv"
+        regions_emissions = {region: consumption_and_emissions_csv_utils.get_emissions_from_csv(file_path=f"{file_path}/{region}", mode='dict', regions=self.csv_regions) for region in regions}
 
         emission_start_index = start_time_index
         consumption_start_index = 0
@@ -305,7 +307,14 @@ class TrainOptimization:
         except Exception as ex:
             raise ex
 
-    def bar_plot(self, no_echo_mode, flexible_fts_emissions_on_run, flexible_fts_emissions_upstream_transfer, static_start_fts_emissions_on_run, static_start_fts_emissions_upstream_transfer, flex_start_emission, p_r_emissions):
+    def bar_plot(self, no_echo_mode,
+                 flexible_fts_emissions_on_run,
+                 flexible_fts_emissions_upstream_transfer,
+                 static_start_fts_emissions_on_run,
+                 static_start_fts_emissions_upstream_transfer,
+                 flex_start_emission,
+                 p_r_emissions,
+                 title_param=''):
 
         fig, ax = plt.subplots()
         fx_fts_up = (no_echo_mode-flexible_fts_emissions_upstream_transfer)*(100/flexible_fts_emissions_upstream_transfer)
@@ -328,7 +337,7 @@ class TrainOptimization:
         ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
         ax.set_ylabel('percentage reduction')
-        ax.set_title('strategies')
+        ax.set_title(f'Emission percentage reduction for {title_param}', fontsize=7)
         plt.xticks(rotation=90, fontsize=7)
         plt.tight_layout()
 
@@ -337,7 +346,7 @@ class TrainOptimization:
 
 
     def compute_graphics(self, run_duration):
-        end_windows_set = [24, 48, 72]
+        end_windows_set = [6, 12,18, 24]
         ending_time_list = []
         for t in end_windows_set:
             ending_time_list.append(self.get_date_for_intervals(self.start_time, (t * 60) + self.minimum_workload_len))
@@ -435,7 +444,8 @@ class TrainOptimization:
                           static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
                           static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
                           flex_start_emission=flex_start_emission,
-                          p_r_emissions=p_r_emissions
+                          p_r_emissions=p_r_emissions,
+                          title_param=f"{self.workload} for window end time {end_t}"
                           )
             """ TIMELINE  PLOT """
             self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals, static_start_fts_intervals= static_start_fts_intervals, flexible_start_start=flex_start_time,
