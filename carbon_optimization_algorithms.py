@@ -4,10 +4,9 @@ from datetime import datetime, timedelta
 from operator import itemgetter
 from statistics import mean
 
-
 from matplotlib import pyplot as plt
 import numpy as np
-from consumption_and_emissions_csv_utils import  ConsumptionAndEmissionsCsvUtils
+from consumption_and_emissions_csv_utils import ConsumptionAndEmissionsCsvUtils
 
 
 class TrainOptimization:
@@ -59,9 +58,10 @@ class TrainOptimization:
         end_time_index = start_index + len(self.workload_energy)
         total_emission = sum(i for i in np.multiply(self.consumption_values,
                                                     list(self.emissions.values())[start_index + 1:end_time_index + 1]))
-        strategy_duration = datetime.strptime(self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len),
-                                              self.csv_utils.date_format_str) - datetime.strptime(self.start_time,
-                                                                                        self.csv_utils.date_format_str)
+        strategy_duration = datetime.strptime(
+            self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len),
+            self.csv_utils.date_format_str) - datetime.strptime(self.start_time,
+                                                                self.csv_utils.date_format_str)
 
         if print_result:
             print("\n-NO ECO MODE-")
@@ -114,13 +114,10 @@ class TrainOptimization:
         return list(dictionary).index(key)
 
     def strategy_duration(self, best_intervals):
-        strategy_duration = datetime.strptime(best_intervals[-1]['end_time'], self.csv_utils.date_format_str) - datetime.strptime(
+        strategy_duration = datetime.strptime(best_intervals[-1]['end_time'],
+                                              self.csv_utils.date_format_str) - datetime.strptime(
             best_intervals[0]['start_time'], self.csv_utils.date_format_str)
         return strategy_duration.total_seconds() / 60
-
-
-
-
 
     @staticmethod
     def get_key_by_index(dictionary, index):
@@ -129,21 +126,6 @@ class TrainOptimization:
     @staticmethod
     def get_value_by_index(dictionary, index):
         return list(dictionary.values())[index]
-
-    def group_intervals(self, start_index, end_index, region_emissions, region):
-        em_list = (list(region_emissions.values())[start_index + 1:end_index + 1])
-
-        return {
-            'start_time': self.get_key_by_index(region_emissions, start_index),
-            'end_time': self.get_key_by_index(region_emissions, end_index),
-            'marginal_emission': sum(em_list),
-            'region': region
-        }
-
-    def compute_id_interval(self, s_index, e_index):
-        start_t = self.get_key_by_index(self.emissions, s_index)
-        end_t = self.get_key_by_index(self.emissions, e_index)
-        return start_t + end_t
 
     def get_data_transfer_emission_during_run(self, best_intervals: list, region_emissions: dict):
         taken_region = [self.reference_region]
@@ -184,7 +166,6 @@ class TrainOptimization:
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
-
 
         start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
         end_window_index = self.get_index_by_key(self.emissions, end_time)
@@ -237,7 +218,6 @@ class TrainOptimization:
 
     def static_start_follow_the_sun(self, print_result=False, run_duration=5):
 
-
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
@@ -252,11 +232,14 @@ class TrainOptimization:
             last_interval = {}
             for region_name, region_list in regions_emissions.items():
                 """ Loop to get the best interval with size specified in interval_len """
-                interval_emission = np.asarray(list(regions_emissions[region_name].values())[emission_start_index + 1: emission_start_index + 1 + interval_len])
-                interval_consumption = np.asarray(self.consumption_values[consumption_start_index:consumption_start_index + interval_len])
+                interval_emission = np.asarray(list(regions_emissions[region_name].values())[
+                                               emission_start_index + 1: emission_start_index + 1 + interval_len])
+                interval_consumption = np.asarray(
+                    self.consumption_values[consumption_start_index:consumption_start_index + interval_len])
                 interval = {
                     'start_time': self.get_key_by_index(regions_emissions[region_name], emission_start_index),
-                    'end_time': self.get_key_by_index(regions_emissions[region_name], emission_start_index + interval_len),
+                    'end_time': self.get_key_by_index(regions_emissions[region_name],
+                                                      emission_start_index + interval_len),
                     'emission': np.dot(interval_emission, interval_consumption),
                     'region': region_name
                 }
@@ -305,12 +288,15 @@ class TrainOptimization:
                  title_param=''):
 
         fig, ax = plt.subplots()
-        fx_fts_up = (no_echo_mode-flexible_fts_emissions_upstream_transfer)*(100/flexible_fts_emissions_upstream_transfer)
-        fx_fts_on_run = (no_echo_mode-flexible_fts_emissions_on_run)*(100/flexible_fts_emissions_on_run)
-        s_fts_emissions_on_run = (no_echo_mode-static_start_fts_emissions_on_run)*(100/static_start_fts_emissions_on_run)
-        s_fts_emissions_upstream = (no_echo_mode-static_start_fts_emissions_upstream_transfer)*(100/static_start_fts_emissions_upstream_transfer)
-        flx_start = (no_echo_mode-flex_start_emission)*(100/flex_start_emission)
-        p_and_r = (no_echo_mode-p_r_emissions)*(100/p_r_emissions)
+        fx_fts_up = (no_echo_mode - flexible_fts_emissions_upstream_transfer) * (
+                    100 / flexible_fts_emissions_upstream_transfer)
+        fx_fts_on_run = (no_echo_mode - flexible_fts_emissions_on_run) * (100 / flexible_fts_emissions_on_run)
+        s_fts_emissions_on_run = (no_echo_mode - static_start_fts_emissions_on_run) * (
+                    100 / static_start_fts_emissions_on_run)
+        s_fts_emissions_upstream = (no_echo_mode - static_start_fts_emissions_upstream_transfer) * (
+                    100 / static_start_fts_emissions_upstream_transfer)
+        flx_start = (no_echo_mode - flex_start_emission) * (100 / flex_start_emission)
+        p_and_r = (no_echo_mode - p_r_emissions) * (100 / p_r_emissions)
 
         fruits = ['flexible_fts_upstream',
                   'flexible_fts_on_run',
@@ -329,15 +315,14 @@ class TrainOptimization:
         plt.xticks(rotation=90, fontsize=7)
         plt.tight_layout()
 
-
         plt.show()
 
-
     def compute_graphics(self, run_duration):
-        end_windows_set = [6, 12,18, 24]
+        end_windows_set = [6, 12, 18, 24]
         ending_time_list = []
         for t in end_windows_set:
-            ending_time_list.append(self.csv_utils.get_date_for_intervals(self.start_time, (t * 60) + self.minimum_workload_len))
+            ending_time_list.append(
+                self.csv_utils.get_date_for_intervals(self.start_time, (t * 60) + self.minimum_workload_len))
         strategy_consumption = {
             'flexible_start':
                 {
@@ -424,7 +409,6 @@ class TrainOptimization:
             strategy_consumption['no_echo_mode']['emission'].append(no_echo_emission)
             strategy_consumption['no_echo_mode']['end_time'].append(end_t.split("+")[0])
 
-
             """ BAR PLOT REDUCTION """
             self.bar_plot(no_echo_mode=no_echo_emission,
                           flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
@@ -436,31 +420,33 @@ class TrainOptimization:
                           title_param=f"{self.workload} for window end time {end_t}"
                           )
             """ TIMELINE  PLOT """
-            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals, static_start_fts_intervals= static_start_fts_intervals, flexible_start_start=flex_start_time,
+            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
+                                static_start_fts_intervals=static_start_fts_intervals,
+                                flexible_start_start=flex_start_time,
                                 pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
 
         """ LINE PLOT EMISSIONS """
         plt.plot(strategy_consumption['flexible_follow_the_sun_data_on_run']['end_time'],
-               strategy_consumption['flexible_follow_the_sun_data_on_run']['emission'],
-               label='f-fts-on-run', linewidth=1.5, linestyle='solid')
+                 strategy_consumption['flexible_follow_the_sun_data_on_run']['emission'],
+                 label='f-fts-on-run', linewidth=1.5, linestyle='solid')
         plt.plot(strategy_consumption['flexible_follow_the_sun_upstream_data_transfer']['end_time'],
-               strategy_consumption['flexible_follow_the_sun_upstream_data_transfer']['emission'],
-               label='f-fts-upstream', linewidth=1.5, linestyle='solid')
+                 strategy_consumption['flexible_follow_the_sun_upstream_data_transfer']['emission'],
+                 label='f-fts-upstream', linewidth=1.5, linestyle='solid')
 
         plt.plot(strategy_consumption['static_start_follow_the_sun_data_on_run']['end_time'],
-               strategy_consumption['static_start_follow_the_sun_data_on_run']['emission'],
-               label='s-fts-on-run', linewidth=1.5, linestyle='solid')
+                 strategy_consumption['static_start_follow_the_sun_data_on_run']['emission'],
+                 label='s-fts-on-run', linewidth=1.5, linestyle='solid')
         plt.plot(strategy_consumption['static_start_follow_the_sun_upstream_data_transfer']['end_time'],
-               strategy_consumption['static_start_follow_the_sun_upstream_data_transfer']['emission'],
-               label='s-fts-upstream', linewidth=1.5, linestyle='solid')
+                 strategy_consumption['static_start_follow_the_sun_upstream_data_transfer']['emission'],
+                 label='s-fts-upstream', linewidth=1.5, linestyle='solid')
 
         plt.plot(strategy_consumption['flexible_start']['end_time'], strategy_consumption['flexible_start']['emission'],
-               label='fs', linewidth=1.5, linestyle='dotted')
+                 label='fs', linewidth=1.5, linestyle='dotted')
         plt.plot(strategy_consumption['pause_and_resume']['end_time'],
-               strategy_consumption['pause_and_resume']['emission'], label='plt&r', linewidth=1.5,
-               linestyle='dashed')
+                 strategy_consumption['pause_and_resume']['emission'], label='plt&r', linewidth=1.5,
+                 linestyle='dashed')
         plt.plot(strategy_consumption['no_echo_mode']['end_time'], strategy_consumption['no_echo_mode']['emission'],
-               label='no_echo', linewidth=1.5, linestyle='dashdot')
+                 label='no_echo', linewidth=1.5, linestyle='dashdot')
 
         plt.xlabel('Window end time', fontsize=7)
         plt.ylabel('gCO2eq', fontsize=7)
@@ -476,8 +462,6 @@ class TrainOptimization:
         plt.tight_layout()
 
         plt.show()
-
-
 
     def to_timestamp(self, date: str):
         return int(datetime.timestamp(datetime.strptime(date, self.csv_utils.date_format_str)))
@@ -502,15 +486,17 @@ class TrainOptimization:
         fs_start_timestamp = self.to_timestamp(flexible_start_start)
         fs_end_timestamp = self.to_timestamp(
             self.csv_utils.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
-        fs_end_datetime = self.to_datetime(self.csv_utils.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
+        fs_end_datetime = self.to_datetime(
+            self.csv_utils.get_date_for_intervals(flexible_start_start, self.minimum_workload_len))
 
         end_datetime = max(flexible_fts_end_datetime, static_start_fts_end_datetime, pause_resume_end_datetime,
                            fs_end_datetime)
 
         start_date_index = self.get_index_by_key(self.emissions, self.start_time)
         end_date_index = self.get_index_by_key(self.emissions,
-                                               datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace('+0000',
-                                                                                                             '+00:00'))
+                                               datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace(
+                                                   '+0000',
+                                                   '+00:00'))
         date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
         timestamp_list = [self.to_timestamp(i) for i in date_list]
 
@@ -533,6 +519,8 @@ class TrainOptimization:
         ax.set_yticks([15, 25, 35, 45],
                       labels=['flexible_fts', 'static_start_fts', 'plt&r', 'fs'])  # Modify y-axis tick labels
         ax.grid(True)  # Make grid lines visible
-        plt.title(f"Timeline for {self.workload} with fts run length of {run_len} min and window-ending time {ending_time}", fontsize=8)
+        plt.title(
+            f"Timeline for {self.workload} with fts run length of {run_len} min and window-ending time {ending_time}",
+            fontsize=8)
         plt.tight_layout()
         plt.show()
