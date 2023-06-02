@@ -411,24 +411,24 @@ class TrainOptimization:
             strategy_consumption['no_echo_mode']['emission'].append(no_echo_emission)
             strategy_consumption['no_echo_mode']['end_time'].append(end_t.split("+")[0])
 
-            # """ BAR PLOT REDUCTION """
-            # self.bar_plot(no_echo_mode=no_echo_emission,
-            #               flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
-            #               flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
-            #               static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
-            #               static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
-            #               flex_start_emission=flex_start_emission,
-            #               p_r_emissions=p_r_emissions,
-            #               title_param=f"{self.workload} for window end time {end_t}"
-            #               )
-            # """ TIMELINE  PLOT """
-            # self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
-            #                     static_start_fts_intervals=static_start_fts_intervals,
-            #                     flexible_start_start=flex_start_time,
-            #                     pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
-            #
-            # """ REGION PLOT """
-            # self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t)
+            """ BAR PLOT REDUCTION """
+            self.bar_plot(no_echo_mode=no_echo_emission,
+                          flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
+                          flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
+                          static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
+                          static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
+                          flex_start_emission=flex_start_emission,
+                          p_r_emissions=p_r_emissions,
+                          title_param=f"{self.workload} for window end time {end_t}"
+                          )
+            """ TIMELINE  PLOT """
+            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
+                                static_start_fts_intervals=static_start_fts_intervals,
+                                flexible_start_start=flex_start_time,
+                                pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
+
+            """ REGION PLOT """
+            self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t)
 
         line_w = 2.6
 
