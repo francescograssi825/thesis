@@ -3,6 +3,8 @@ import os
 import random
 from datetime import datetime, timedelta
 
+import numpy as np
+
 import watt_time_controller
 
 
@@ -17,8 +19,8 @@ class ConsumptionAndEmissionsCsvUtils:
 
             "other_regions":
                 {
-                    "reference_name": "CAISO_NORTH_2018-01_MOER.csv",
-                    "reference_path": "csv_dir/region_emissions/CAISO_NORTH_2018-01_MOER.csv",
+                    "reference_name": "IT_2021-01_MOER.csv",
+                    "reference_path": "csv_dir/region_emissions/IT_2021-01_MOER.csv",
                     "dir_path": "csv_dir/region_emissions"
                 },
 
@@ -58,21 +60,19 @@ class ConsumptionAndEmissionsCsvUtils:
 
     def from_electricity_map_to_wattTime(self, file_path):
         end_datetime = "2021-01-31T23:00:00+00:00"
+        n_intervals = int(60 / 5) + 1
 
         with open(file_path, 'r') as csv_emission:
             dict_reader = csv.DictReader(csv_emission)
             date_dict = {}
             list_row = [row for row in dict_reader]
             for row in list_row:
-                date_dict.update({row['datetime']: float(row['carbon_intensity_avg'])})
-                last_datetime = row['datetime']
-                for minutes in range(12 - 1):  # 60 min divided by 5 min = 12
-                    current_val = float(list_row[list_row.index(row)]['carbon_intensity_avg'])
-                    next_val = float(list_row[list_row.index(row) + 1]['carbon_intensity_avg'])
-                    emission_val = (current_val + next_val) / 2
-                    last_datetime = self.get_date_for_intervals(last_datetime, 5)
-                    date_dict.update({last_datetime: emission_val})
-
+                lower_b = row
+                upper_b = list_row[list_row.index(row) + 1]
+                interpolated_list = np.linspace(float(lower_b['carbon_intensity_avg']),
+                                                float(upper_b['carbon_intensity_avg']), n_intervals)
+                range_date_list = [self.get_date_for_intervals(lower_b['datetime'], 5 * i) for i in range(n_intervals)]
+                date_dict.update({range_date_list[i]: interpolated_list[i] for i in range(n_intervals)})
                 if row['datetime'] == end_datetime:
                     return date_dict
 

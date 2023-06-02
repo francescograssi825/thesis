@@ -6,8 +6,8 @@ from requests.auth import HTTPBasicAuth
 
 class WattTimeController:
     def __init__(self):
-        self.username = 'aerrico'
-        self.password = 'aerricowattTime7834!'
+        self.username = 'roberto.vergallo'
+        self.password = 'H0tUqytKdZ_J;M5'
         self.email = 'alessio.errico1@studenti.unisalento.com'
         self.token = self.log_to_watt_time()
 

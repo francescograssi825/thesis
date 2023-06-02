@@ -1,6 +1,6 @@
 import math
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from operator import itemgetter
 from statistics import mean
 
@@ -278,6 +278,10 @@ class TrainOptimization:
         except Exception as ex:
             raise ex
 
+    @staticmethod
+    def compute_percentage_decrease(initial_val, final_val):
+        return ((initial_val - final_val) / initial_val) * 100
+
     def bar_plot(self, no_echo_mode,
                  flexible_fts_emissions_on_run,
                  flexible_fts_emissions_upstream_transfer,
@@ -288,15 +292,13 @@ class TrainOptimization:
                  title_param=''):
 
         fig, ax = plt.subplots()
-        fx_fts_up = (no_echo_mode - flexible_fts_emissions_upstream_transfer) * (
-                    100 / flexible_fts_emissions_upstream_transfer)
-        fx_fts_on_run = (no_echo_mode - flexible_fts_emissions_on_run) * (100 / flexible_fts_emissions_on_run)
-        s_fts_emissions_on_run = (no_echo_mode - static_start_fts_emissions_on_run) * (
-                    100 / static_start_fts_emissions_on_run)
-        s_fts_emissions_upstream = (no_echo_mode - static_start_fts_emissions_upstream_transfer) * (
-                    100 / static_start_fts_emissions_upstream_transfer)
-        flx_start = (no_echo_mode - flex_start_emission) * (100 / flex_start_emission)
-        p_and_r = (no_echo_mode - p_r_emissions) * (100 / p_r_emissions)
+        fx_fts_up = self.compute_percentage_decrease(no_echo_mode, flexible_fts_emissions_upstream_transfer)
+        fx_fts_on_run = self.compute_percentage_decrease(no_echo_mode, flexible_fts_emissions_on_run)
+        s_fts_emissions_on_run = self.compute_percentage_decrease(no_echo_mode, static_start_fts_emissions_on_run)
+        s_fts_emissions_upstream = self.compute_percentage_decrease(no_echo_mode,
+                                                                    static_start_fts_emissions_upstream_transfer)
+        flx_start = self.compute_percentage_decrease(no_echo_mode, flex_start_emission)
+        p_and_r = self.compute_percentage_decrease(no_echo_mode, p_r_emissions)
 
         fruits = ['flexible_fts_upstream',
                   'flexible_fts_on_run',
@@ -409,44 +411,49 @@ class TrainOptimization:
             strategy_consumption['no_echo_mode']['emission'].append(no_echo_emission)
             strategy_consumption['no_echo_mode']['end_time'].append(end_t.split("+")[0])
 
-            """ BAR PLOT REDUCTION """
-            self.bar_plot(no_echo_mode=no_echo_emission,
-                          flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
-                          flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
-                          static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
-                          static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
-                          flex_start_emission=flex_start_emission,
-                          p_r_emissions=p_r_emissions,
-                          title_param=f"{self.workload} for window end time {end_t}"
-                          )
-            """ TIMELINE  PLOT """
-            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
-                                static_start_fts_intervals=static_start_fts_intervals,
-                                flexible_start_start=flex_start_time,
-                                pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
+            # """ BAR PLOT REDUCTION """
+            # self.bar_plot(no_echo_mode=no_echo_emission,
+            #               flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
+            #               flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
+            #               static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
+            #               static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
+            #               flex_start_emission=flex_start_emission,
+            #               p_r_emissions=p_r_emissions,
+            #               title_param=f"{self.workload} for window end time {end_t}"
+            #               )
+            # """ TIMELINE  PLOT """
+            # self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
+            #                     static_start_fts_intervals=static_start_fts_intervals,
+            #                     flexible_start_start=flex_start_time,
+            #                     pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
+            #
+            # """ REGION PLOT """
+            # self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t)
+
+        line_w = 2.6
 
         """ LINE PLOT EMISSIONS """
         plt.plot(strategy_consumption['flexible_follow_the_sun_data_on_run']['end_time'],
                  strategy_consumption['flexible_follow_the_sun_data_on_run']['emission'],
-                 label='f-fts-on-run', linewidth=1.5, linestyle='solid')
+                 label='f-fts-on-run', linewidth=line_w, linestyle='dashdot')
         plt.plot(strategy_consumption['flexible_follow_the_sun_upstream_data_transfer']['end_time'],
                  strategy_consumption['flexible_follow_the_sun_upstream_data_transfer']['emission'],
-                 label='f-fts-upstream', linewidth=1.5, linestyle='solid')
+                 label='f-fts-upstream', linewidth=line_w, linestyle='dotted')
 
         plt.plot(strategy_consumption['static_start_follow_the_sun_data_on_run']['end_time'],
                  strategy_consumption['static_start_follow_the_sun_data_on_run']['emission'],
-                 label='s-fts-on-run', linewidth=1.5, linestyle='solid')
+                 label='s-fts-on-run', linewidth=line_w, linestyle='dotted')
         plt.plot(strategy_consumption['static_start_follow_the_sun_upstream_data_transfer']['end_time'],
                  strategy_consumption['static_start_follow_the_sun_upstream_data_transfer']['emission'],
-                 label='s-fts-upstream', linewidth=1.5, linestyle='solid')
+                 label='s-fts-upstream', linewidth=line_w, linestyle='dotted')
 
         plt.plot(strategy_consumption['flexible_start']['end_time'], strategy_consumption['flexible_start']['emission'],
-                 label='fs', linewidth=1.5, linestyle='dotted')
+                 label='fs', linewidth=line_w, linestyle='dotted')
         plt.plot(strategy_consumption['pause_and_resume']['end_time'],
-                 strategy_consumption['pause_and_resume']['emission'], label='plt&r', linewidth=1.5,
+                 strategy_consumption['pause_and_resume']['emission'], label='plt&r', linewidth=line_w,
                  linestyle='dashed')
         plt.plot(strategy_consumption['no_echo_mode']['end_time'], strategy_consumption['no_echo_mode']['emission'],
-                 label='no_echo', linewidth=1.5, linestyle='dashdot')
+                 label='no_echo', linewidth=line_w, linestyle='dashdot')
 
         plt.xlabel('Window end time', fontsize=7)
         plt.ylabel('gCO2eq', fontsize=7)
@@ -520,7 +527,54 @@ class TrainOptimization:
                       labels=['flexible_fts', 'static_start_fts', 'plt&r', 'fs'])  # Modify y-axis tick labels
         ax.grid(True)  # Make grid lines visible
         plt.title(
-            f"Timeline for {self.workload} with fts run length of {run_len} min and window-ending time {ending_time}",
-            fontsize=8)
+            f"{self.workload}, fts-run-duration {run_len} min, window-ending time {ending_time}",
+            fontsize=7)
         plt.tight_layout()
         plt.show()
+
+    def region_graph(self, fts_method, run_len, ending_time):
+
+        fts_method_end_datetime = self.to_datetime(fts_method[-1]['end_time'])
+
+        end_datetime = fts_method_end_datetime
+
+        start_date_index = self.get_index_by_key(self.emissions, self.start_time)
+        end_date_index = self.get_index_by_key(self.emissions,
+                                               datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace(
+                                                   '+0000',
+                                                   '+00:00'))
+        date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
+        timestamp_list = [self.to_timestamp(i) for i in date_list]
+
+        fts_method_list_set = self.get_grouped_list_of_set_by_region(fts_method, run_len)
+
+        fig, ax = plt.subplots()
+        count = 1
+
+        for key, value in fts_method_list_set.items():
+            ax.broken_barh(value, (10 * count, 10), facecolors='tab:green')
+            count = count + 1
+
+        ax.set_ylim(5, (len(fts_method_list_set) * 10) + 15)
+
+        plt.xticks(ticks=timestamp_list, labels=date_list, fontsize=7, rotation=90)
+        ax.set_xlabel('time')
+
+        ax.set_yticks([15 + (i * 10) for i in range(0, len(fts_method_list_set))],
+                      labels=[i.replace('.csv', '') for i in fts_method_list_set])  # Modify y-axis tick labels
+        ax.grid(True)  # Make grid lines visible
+        plt.title(
+            f"{self.workload}, fts-run-duration {run_len} min, window-ending time {ending_time}",
+            fontsize=7)
+        plt.tight_layout()
+        plt.show()
+
+    def get_grouped_list_of_set_by_region(self, list_of_dict: list, run_len):
+        result_dict = {}
+        run_len_sec = run_len * 60
+        for el in list_of_dict:
+            region = el['region']
+            interval_list = result_dict.get(region, [])
+            interval_list.append((self.to_timestamp(el['start_time']), run_len_sec))
+            result_dict.update({region: interval_list})
+        return result_dict
