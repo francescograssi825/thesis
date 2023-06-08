@@ -15,7 +15,6 @@ class TrainOptimization:
         self.workload_energy = self.csv_utils.get_workload_energy_consumption_from_csv(workload)
         self.workload = workload
         self.csv_region_zone = region_zone
-        self.emissions = self.csv_utils.get_emissions_from_csv(mode='dict')
         self.start_time = start_time
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
@@ -24,20 +23,21 @@ class TrainOptimization:
         self.kwH_for_dataset = self.kwH_per_GB * self.dataset_dim
         self.reference_region = self.csv_utils.reference_region[region_zone]["reference_name"]
 
-    def flexible_start(self, end_time, print_result=False):
-        start_exc = time.time()
-        start_index = self.get_index_by_key(self.emissions, self.start_time)
-        end_window = self.get_index_by_key(self.emissions, end_time) + 1
+    def flexible_start(self, end_time, start_time='', print_result=False, emissions_path=''):
+        start_t = start_time if start_time else self.start_time
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
+        start_index = self.get_index_by_key(emissions, start_t)
+        end_window = self.get_index_by_key(emissions, end_time) + 1
 
         last_total_emissions = 0
         optimal_start_time = ''
         for start_window_index in range(start_index + 1, end_window):
-            ranged_emissions = list(self.emissions.values())[
+            ranged_emissions = list(emissions.values())[
                                start_window_index: start_window_index + len(self.workload_energy)]
             total_emissions = np.asarray(self.consumption_values).dot(np.asarray(ranged_emissions))
             if last_total_emissions == 0 or total_emissions < last_total_emissions:
                 last_total_emissions = total_emissions
-                optimal_start_time = self.get_key_by_index(self.emissions, start_window_index)
+                optimal_start_time = self.get_key_by_index(emissions, start_window_index)
 
         optimal_emissions = last_total_emissions
         optimal_end_time = self.csv_utils.get_date_for_intervals(optimal_start_time, self.minimum_workload_len)
@@ -48,46 +48,44 @@ class TrainOptimization:
             print(f"OPTIMAL STARTING TIME: {optimal_start_time}")
             print(f"EMISSIONS\t ---> \t{optimal_emissions} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{strategy_duration}")
-            end_exc = time.time()
-            print("Execution time :", end_exc - start_exc)
+
         return optimal_start_time, optimal_emissions
 
-    def no_echo_mode(self, print_result=False):
-        start_exc = time.time()
-        start_index = self.get_index_by_key(self.emissions, self.start_time)
+    def no_echo_mode(self, start_time='', print_result=False, emission_path=''):
+        start_t = start_time if start_time else self.start_time
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emission_path)
+        start_index = self.get_index_by_key(emissions, start_t)
         end_time_index = start_index + len(self.workload_energy)
         total_emission = sum(i for i in np.multiply(self.consumption_values,
-                                                    list(self.emissions.values())[start_index + 1:end_time_index + 1]))
+                                                    list(emissions.values())[start_index + 1:end_time_index + 1]))
         strategy_duration = datetime.strptime(
-            self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len),
-            self.csv_utils.date_format_str) - datetime.strptime(self.start_time,
+            self.csv_utils.get_date_for_intervals(start_t, self.minimum_workload_len),
+            self.csv_utils.date_format_str) - datetime.strptime(start_t,
                                                                 self.csv_utils.date_format_str)
 
         if print_result:
             print("\n-NO ECO MODE-")
-            print(f"STARTING TIME: {self.start_time}")
+            print(f"STARTING TIME: {start_t}")
             print(f"EMISSIONS\t ---> \t{total_emission} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{strategy_duration}")
-            end_exc = time.time()
-            print("Execution time :", end_exc - start_exc)
 
         return total_emission, strategy_duration.total_seconds() / 60
 
-    def pause_and_resume(self, end_time, region='csv_dir/region_emissions/CAISO_NORTH_2018-01_MOER.csv',
-                         print_result=False):
-        start_exc = time.time()
-        if self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len) > end_time:
+    def pause_and_resume(self, end_time, start_time='', emissions_path='', print_result=False):
+        start_t = start_time if start_time else self.start_time
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
+        if self.csv_utils.get_date_for_intervals(start_t, self.minimum_workload_len) > end_time:
             raise Exception(
-                f"PAUSE AND RESUME EXCEPTION: Minimum ending time required is {self.csv_utils.get_date_for_intervals(self.start_time, self.minimum_workload_len)} , but {end_time} is given")
+                f"PAUSE AND RESUME EXCEPTION: Minimum ending time required is {self.csv_utils.get_date_for_intervals(start_t, self.minimum_workload_len)} , but {end_time} is given")
 
-        start_index = list(self.emissions).index(self.start_time)
-        end_index = list(self.emissions).index(end_time)
+        start_index = list(emissions).index(start_t)
+        end_index = list(emissions).index(end_time)
 
         interval_marginal_emissions = [{
-            'region': region.split("/")[2],
-            'start_time': list(self.emissions.keys())[em_index],
-            'end_time': list(self.emissions.keys())[em_index + 1],
-            'marginal_emission': list(self.emissions.values())[em_index + 1]
+            'region': self.csv_utils.reference_region[self.csv_region_zone]['reference_name'],
+            'start_time': list(emissions.keys())[em_index],
+            'end_time': list(emissions.keys())[em_index + 1],
+            'marginal_emission': list(emissions.values())[em_index + 1]
         } for em_index in range(start_index, end_index)]
 
         sorted_interval_by_emissions = sorted(interval_marginal_emissions, key=itemgetter('marginal_emission'))[
@@ -104,8 +102,6 @@ class TrainOptimization:
             print(f"INTERVALS : {sorted_interval_by_start}")
             print(f"EMISSIONS\t ---> \t{carbon_emission} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{self.strategy_duration(sorted_interval_by_start)}")
-            end_exc = time.time()
-            print("Execution time :", end_exc - start_exc)
 
         return sorted_interval_by_start, carbon_emission
 
@@ -127,9 +123,10 @@ class TrainOptimization:
     def get_value_by_index(dictionary, index):
         return list(dictionary.values())[index]
 
-    def get_data_transfer_emission_during_run(self, best_intervals: list, region_emissions: dict):
+    def get_data_transfer_emission_during_run(self, year, month, best_intervals: list, region_emissions: dict):
         taken_region = [self.reference_region]
-        marginal_emissions = [region_emissions[self.reference_region][best_intervals[0]['start_time']]]
+        reg = f'{self.csv_utils.reference_region["other_regions"]["region_key"]}_{year}-{month}_MOER.csv' if self.csv_region_zone == "other_regions" else self.reference_region
+        marginal_emissions = [region_emissions[reg][best_intervals[0]['start_time']]]
         for interval in best_intervals:
             if interval['region'] not in taken_region:
                 marginal_emissions.append(region_emissions[interval['region']][interval['end_time']])
@@ -138,11 +135,14 @@ class TrainOptimization:
         return sum([(marginal_emissions[i] + marginal_emissions[i + 1]) / 2 * self.kwH_for_dataset for i in
                     range(len(marginal_emissions) - 1)])
 
-    def get_upstream_data_transfer_emissions(self, best_intervals: list, region_emissions: dict):
-        start_time_index = self.get_index_by_key(self.emissions, self.start_time)
-        start_run_index = self.get_index_by_key(self.emissions, best_intervals[0]['start_time'])
+    def get_upstream_data_transfer_emissions(self, year, month, best_intervals: list, region_emissions: dict,
+                                             start_time, emissions_path=''):
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
+        start_time_index = self.get_index_by_key(emissions, start_time)
+        start_run_index = self.get_index_by_key(emissions, best_intervals[0]['start_time'])
         region_set = set(i['region'] for i in best_intervals)
-        region_set.add(self.reference_region)
+        reg = f'{self.csv_utils.reference_region["other_regions"]["region_key"]}_{year}-{month}_MOER.csv' if self.csv_region_zone == "other_regions" else self.reference_region
+        region_set.add(reg)
         best_emission = 0
         start_time_transfer = ''
         for i in range(start_time_index, start_run_index + 1):
@@ -150,25 +150,27 @@ class TrainOptimization:
             emission = self.kwH_for_dataset * mean(
                 [self.get_value_by_index(region_emissions[j], i) for j in region_set])
             if best_emission == 0 or emission < best_emission:
-                start_time_transfer = self.get_key_by_index(self.emissions, i)
+                start_time_transfer = self.get_key_by_index(emissions, i)
                 best_emission = emission
         return best_emission, start_time_transfer
 
-    def follow_the_sun_optimized(self, end_time, print_result=False, run_duration=5):
+    def follow_the_sun_optimized(self, end_time, start_time='', emissions_path='', print_result=False, run_duration=5,
+                                 year='2021', month='01'):
         """
         Compute emissions choosing the 5 min intervals withe the lowest marginal emissions between different regions.
         The time to transfer the computation must be considered
         """
-
-        start_exc = time.time()
-        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone()
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
+        start_t = start_time if start_time else self.start_time
+        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone(reference_month=month,
+                                                                                 reference_year=year)
         best_intervals = []
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
 
-        start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), self.start_time)
-        end_window_index = self.get_index_by_key(self.emissions, end_time)
+        start_window_index = self.get_index_by_key(self.get_value_by_index(regions_emissions, 0), start_t)
+        end_window_index = self.get_index_by_key(emissions, end_time)
 
         for start_window_index in range(start_window_index, end_window_index):
             """ Loop to try every starting time """
@@ -203,29 +205,33 @@ class TrainOptimization:
                 best_intervals = intervals.copy()
 
         total_emissions = sum(i['emission'] for i in best_intervals)
-        transfer_on_run_emission = self.get_data_transfer_emission_during_run(best_intervals, regions_emissions)
+        transfer_on_run_emission = self.get_data_transfer_emission_during_run(year, month, best_intervals,
+                                                                              regions_emissions)
         upstream_data_transfer_emission, upstream_data_transfer_start_time = self.get_upstream_data_transfer_emissions(
-            best_intervals, regions_emissions)
+            year, month,
+            best_intervals, regions_emissions, emissions_path=emissions_path, start_time=start_t)
 
         if print_result:
             print("\n-FOLLOW THE SUN OPTIMIZED-")
             print(f"INTERVALS : {best_intervals}")
             print(f"EMISSIONS\t ---> \t{total_emissions} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{self.strategy_duration(best_intervals)}")
-            end_exc = time.time()
-            print("Execution time :", end_exc - start_exc)
+
         return best_intervals, total_emissions + transfer_on_run_emission, total_emissions + upstream_data_transfer_emission
 
-    def static_start_follow_the_sun(self, print_result=False, run_duration=5):
-
+    def static_start_follow_the_sun(self, print_result=False, emissions_path='', start_time='', run_duration=5,
+                                    month='01', year='2021'):
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
+        start_t = start_time if start_time else self.start_time
         run_len = run_duration // 5
         intervals_len = [run_len if i < len(self.workload_energy) // run_len else (len(self.workload_energy) % run_len)
                          for i in range(math.ceil(len(self.workload_energy) / run_len))]
 
-        start_time_index = self.get_index_by_key(self.emissions, self.start_time)
+        start_time_index = self.get_index_by_key(emissions, start_t)
         selected_intervals = []
 
-        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone()
+        regions_emissions = self.csv_utils.all_region_emission_for_a_region_zone(reference_year=year,
+                                                                                 reference_month=month)
         emission_start_index = start_time_index
         consumption_start_index = 0
         for interval_len in intervals_len:
@@ -252,9 +258,11 @@ class TrainOptimization:
             consumption_start_index = consumption_start_index + interval_len
 
         total_emissions = sum(i['emission'] for i in selected_intervals)
-        transfer_on_run_emission = self.get_data_transfer_emission_during_run(selected_intervals, regions_emissions)
+        transfer_on_run_emission = self.get_data_transfer_emission_during_run(year, month, selected_intervals,
+                                                                              regions_emissions)
         upstream_data_transfer_emission, upstream_data_transfer_start_time = self.get_upstream_data_transfer_emissions(
-            selected_intervals, regions_emissions)
+            year, month,
+            selected_intervals, regions_emissions, emissions_path=emissions_path, start_time=start_t)
 
         if print_result:
             print("\n-STATIC START FTS-")
@@ -318,6 +326,100 @@ class TrainOptimization:
         plt.tight_layout()
 
         plt.show()
+
+    def years_avarage_reduction_bar_plot(self, run_duration, years='2021'):
+        print("Graph computing")
+        ref_days = ["01T00:00:00+00:00", "05T00:00:00+00:00", "10T00:00:00+00:00", "15T00:00:00+00:00",
+                    "20T00:00:00+00:00", "25T00:00:00+00:00"]
+        end_time_val = [6, 12, 18, 24]
+        month_list = [1, 2, 3, 4, 6, 8, 10, 11]
+        for t in end_time_val:
+            fts_reduction_upstream = []
+            fts_reduction_on_run = []
+            static_fts_reduction_upstream = []
+            static_fts_reduction_on_run = []
+            p_r_reduction = []
+            fs_reduction = []
+
+            for d in ref_days:
+
+                flexible_fts_emissions_upstream_transfer = []
+                flexible_fts_emissions_on_run = []
+                static_fts_emissions_upstream = []
+                static_fts_emissions_on_run = []
+                p_r_emissions = []
+                fs_emissions = []
+                no_echo_mode = []
+
+                for i in month_list:
+                    start_t = f"{years}-{str(i).zfill(2)}-{d}"
+                    finish_hour = self.csv_utils.get_date_for_intervals(start_t, (t * 60) + self.minimum_workload_len)
+
+                    fts_set_res = self.follow_the_sun_optimized(year=years, month=str(i).zfill(2), end_time=finish_hour,
+                                                                emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv",
+                                                                start_time=start_t, run_duration=run_duration)
+                    s_fts_res = self.static_start_follow_the_sun(year=years, month=str(i).zfill(2),
+                                                                 emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv",
+                                                                 start_time=start_t, run_duration=run_duration)
+
+                    flexible_fts_emissions_upstream_transfer.append(fts_set_res[2])
+                    flexible_fts_emissions_on_run.append(fts_set_res[1])
+                    static_fts_emissions_upstream.append(s_fts_res[2])
+                    static_fts_emissions_on_run.append(s_fts_res[1])
+                    p_r_emissions.append(self.pause_and_resume(end_time=finish_hour, start_time=start_t,
+                                                               emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                             1])
+                    fs_emissions.append(self.flexible_start(end_time=finish_hour, start_time=start_t,
+                                                            emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                            1])
+
+                    no_echo_mode.append(self.no_echo_mode(start_time=start_t,
+                                                          emission_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                            0])
+                    fts_reduction_upstream.append(self.compute_percentage_decrease(no_echo_mode[-1],
+                                                                                   flexible_fts_emissions_upstream_transfer[
+                                                                                       -1]))
+                    fts_reduction_on_run.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], flexible_fts_emissions_on_run[-1]))
+                    static_fts_reduction_upstream.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], static_fts_emissions_upstream[-1]))
+                    static_fts_reduction_on_run.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], static_fts_emissions_on_run[-1]))
+                    p_r_reduction.append(self.compute_percentage_decrease(no_echo_mode[-1], p_r_emissions[-1]))
+                    fs_reduction.append(self.compute_percentage_decrease(no_echo_mode[-1], fs_emissions[-1]))
+
+            fig, ax = plt.subplots()
+
+            avg_f_fts_up = np.average(np.asarray(fts_reduction_upstream))
+            avg_f_fts_on_run = np.average(np.asarray(fts_reduction_on_run))
+            avg_s_fts_up = np.average(np.asarray(static_fts_reduction_upstream))
+            avg_s_fts_on_run = np.average(np.asarray(static_fts_reduction_on_run))
+            avg_p_r = np.average(np.asarray(p_r_reduction))
+            avg_fs = np.average(np.asarray(fs_reduction))
+            fruits = ['flexible_fts_upstream',
+                      'flexible_fts_on_run',
+                      'static_fts_upstream',
+                      'static_fts_on_run',
+                      'p&r',
+                      'fs']
+            counts = [avg_f_fts_up,
+                      avg_f_fts_on_run,
+                      avg_s_fts_up,
+                      avg_s_fts_on_run,
+                      avg_p_r,
+                      avg_fs]
+            bar_labels = ['red', 'blue', 'green', 'yellow', 'violet', 'orange']
+            bar_colors = ['red', 'blue', 'green', 'yellow', 'violet', 'orange']
+
+            ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
+
+            ax.set_ylabel('percentage reduction')
+            ax.set_title(f"Time-Wind:{t} Run duration:{run_duration}", fontsize=7)
+            plt.xticks(rotation=90, fontsize=7)
+            plt.tight_layout()
+
+            plt.show()
+            print("end graph")
 
     def compute_graphics(self, run_duration):
         end_windows_set = [6, 12, 18, 24]
@@ -428,7 +530,11 @@ class TrainOptimization:
                                 pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
 
             """ REGION PLOT """
-            self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t)
+            self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t,
+                              fts_version="flexible_fts")
+            """ REGION PLOT """
+            self.region_graph(fts_method=static_start_fts_intervals, run_len=run_duration, ending_time=end_t,
+                              fts_version="static_fts")
 
         line_w = 2.6
 
@@ -479,7 +585,7 @@ class TrainOptimization:
     def timeline_graph(self, flexible_fts_intervals: list, static_start_fts_intervals: list,
                        pause_resume_intervals: list, flexible_start_start: str, run_len,
                        ending_time):
-
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict')
         flexible_fts_start_timestamp = self.to_timestamp(flexible_fts_intervals[0]['start_time'])
         flexible_fts_end_timestamp = self.to_timestamp(flexible_fts_intervals[-1]['end_time'])
         flexible_fts_end_datetime = self.to_datetime(flexible_fts_intervals[-1]['end_time'])
@@ -499,12 +605,12 @@ class TrainOptimization:
         end_datetime = max(flexible_fts_end_datetime, static_start_fts_end_datetime, pause_resume_end_datetime,
                            fs_end_datetime)
 
-        start_date_index = self.get_index_by_key(self.emissions, self.start_time)
-        end_date_index = self.get_index_by_key(self.emissions,
+        start_date_index = self.get_index_by_key(emissions, self.start_time)
+        end_date_index = self.get_index_by_key(emissions,
                                                datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace(
                                                    '+0000',
                                                    '+00:00'))
-        date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
+        date_list = [self.get_key_by_index(emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
         timestamp_list = [self.to_timestamp(i) for i in date_list]
 
         flexible_fts_list = [(flexible_fts_start_timestamp, flexible_fts_end_timestamp - flexible_fts_start_timestamp)]
@@ -532,18 +638,18 @@ class TrainOptimization:
         plt.tight_layout()
         plt.show()
 
-    def region_graph(self, fts_method, run_len, ending_time):
-
+    def region_graph(self, fts_method, run_len, ending_time, fts_version):
+        emissions = self.csv_utils.get_emissions_from_csv(mode='dict')
         fts_method_end_datetime = self.to_datetime(fts_method[-1]['end_time'])
 
         end_datetime = fts_method_end_datetime
 
-        start_date_index = self.get_index_by_key(self.emissions, self.start_time)
-        end_date_index = self.get_index_by_key(self.emissions,
+        start_date_index = self.get_index_by_key(emissions, self.start_time)
+        end_date_index = self.get_index_by_key(emissions,
                                                datetime.strftime(end_datetime, self.csv_utils.date_format_str).replace(
                                                    '+0000',
                                                    '+00:00'))
-        date_list = [self.get_key_by_index(self.emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
+        date_list = [self.get_key_by_index(emissions, i) for i in range(start_date_index, end_date_index + 1, 12)]
         timestamp_list = [self.to_timestamp(i) for i in date_list]
 
         fts_method_list_set = self.get_grouped_list_of_set_by_region(fts_method, run_len)
@@ -564,7 +670,7 @@ class TrainOptimization:
                       labels=[i.replace('.csv', '') for i in fts_method_list_set])  # Modify y-axis tick labels
         ax.grid(True)  # Make grid lines visible
         plt.title(
-            f"{self.workload}, fts-run-duration {run_len} min, window-ending time {ending_time}",
+            f"{self.workload}, {fts_version}-run-duration {run_len} min, window-ending time {ending_time}",
             fontsize=7)
         plt.tight_layout()
         plt.show()

@@ -9,19 +9,27 @@ import watt_time_controller
 
 
 class ConsumptionAndEmissionsCsvUtils:
-    def __init__(self, region_zone):
+    def __init__(self, region_zone, reference_year="2021", reference_month="01"):
         self.watt_time = watt_time_controller.WattTimeController()
         self.region_zone = region_zone
         self.libs_to_grams = 453.59
         self.mega_to_kilowatt_hours = 1000
+        self.reference_years = reference_year
+        self.reference_month = reference_month
+        self.wattTime_all_dir_paths = "csv_dir/region_emissions"
+        self.ElectricityMaps_csv = "csv_dir/italy_csv"
         self.date_format_str = '%Y-%m-%dT%H:%M:%S%z'
         self.reference_region = {
 
             "other_regions":
                 {
                     "reference_name": "IT_2021-01_MOER.csv",
-                    "reference_path": "csv_dir/region_emissions/IT_2021-01_MOER.csv",
-                    "dir_path": "csv_dir/region_emissions"
+                    "reference_path": "csv_dir/region_emissions/IT_historical/IT_2021-01_MOER.csv",
+                    "dir_path": "csv_dir/region_emissions/IT_historical",
+                    "dir_historical": "csv_dir/region_emissions/IT_historical/IT",
+                    "historical_dirs_path": "csv_dir/region_emissions",
+                    "region_key": "IT"
+
                 },
 
             "italy":
@@ -93,19 +101,31 @@ class ConsumptionAndEmissionsCsvUtils:
                 dict_writer.writeheader()
                 dict_writer.writerows(simulated_emissions)
 
-    def list_all_area(self):
+    def list_all_area_wattTime(self, reference_years='2021', reference_month='01'):
 
-        all_regions = os.listdir(self.reference_region[self.region_zone]['dir_path'])
-        if self.region_zone == "other_regions":
-            all_regions.remove('.DS_Store')
-        return all_regions
+        all_regions = os.listdir(self.wattTime_all_dir_paths)
+        all_regions.remove('.DS_Store')
 
-    def all_region_emission_for_a_region_zone(self):
-        all_region_name = self.list_all_area()
+        return [{"name": f"{i.split('_')[0]}_{reference_years}-{reference_month}_MOER.csv",
+                 "path": f"{self.wattTime_all_dir_paths}/{i}/{i.split('_')[0]}_{reference_years}-{reference_month}_MOER.csv"}
+                for i in all_regions]
+
+    def list_all_area_ElectricityMaps(self, reference_years='2021', reference_month='01'):
+
+        all_regions = os.listdir(self.ElectricityMaps_csv)
+
+        return [{"name": i,
+                 "path": f"{self.ElectricityMaps_csv}/{i}"}
+                for i in all_regions]
+
+    def all_region_emission_for_a_region_zone(self, reference_year='2021', reference_month='01'):
+        all_region_list = self.list_all_area_wattTime(reference_years=reference_year,
+                                                      reference_month=reference_month) if self.region_zone == 'other_regions' else self.list_all_area_ElectricityMaps(
+            reference_years=reference_year, reference_month=reference_month)
         region_dict = {}
-        for region_name in all_region_name:
-            region_dict.update({region_name: self.get_emissions_from_csv(
-                file_path=f"{self.reference_region[self.region_zone]['dir_path']}/{region_name}",
+        for region in all_region_list:
+            region_dict.update({region['name']: self.get_emissions_from_csv(
+                file_path=region['path'],
                 mode='dict')})
         return region_dict
 
