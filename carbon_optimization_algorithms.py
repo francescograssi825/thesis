@@ -18,8 +18,8 @@ class TrainOptimization:
         self.start_time = start_time
         self.minimum_workload_len = 5 * len(self.workload_energy)
         self.consumption_values = [i['total_consumption'] for i in self.workload_energy]
-        self.kwH_per_GB = 0.028  # Kwh/Gb
-        self.dataset_dim = 0.1  # Gb
+        self.kwH_per_GB = 0.02875  # Kwh/Gb
+        self.dataset_dim = 0.3198  # Gb
         self.kwH_for_dataset = self.kwH_per_GB * self.dataset_dim
         self.reference_region = self.csv_utils.reference_region[region_zone]["reference_name"]
 
@@ -133,7 +133,7 @@ class TrainOptimization:
                 taken_region.append(interval['region'])
 
         return sum([(marginal_emissions[i] + marginal_emissions[i + 1]) / 2 * self.kwH_for_dataset for i in
-                    range(len(marginal_emissions) - 1)])
+                    range(len(marginal_emissions) - 1)]), len(taken_region)-2
 
     def get_upstream_data_transfer_emissions(self, year, month, best_intervals: list, region_emissions: dict,
                                              start_time, emissions_path=''):
@@ -205,7 +205,7 @@ class TrainOptimization:
                 best_intervals = intervals.copy()
 
         total_emissions = sum(i['emission'] for i in best_intervals)
-        transfer_on_run_emission = self.get_data_transfer_emission_during_run(year, month, best_intervals,
+        transfer_on_run_emission, n_transfer = self.get_data_transfer_emission_during_run(year, month, best_intervals,
                                                                               regions_emissions)
         upstream_data_transfer_emission, upstream_data_transfer_start_time = self.get_upstream_data_transfer_emissions(
             year, month,
@@ -217,7 +217,7 @@ class TrainOptimization:
             print(f"EMISSIONS\t ---> \t{total_emissions} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{self.strategy_duration(best_intervals)}")
 
-        return best_intervals, total_emissions + transfer_on_run_emission, total_emissions + upstream_data_transfer_emission
+        return best_intervals, total_emissions + transfer_on_run_emission, total_emissions + upstream_data_transfer_emission, n_transfer
 
     def static_start_follow_the_sun(self, print_result=False, emissions_path='', start_time='', run_duration=5,
                                     month='01', year='2021'):
@@ -258,7 +258,7 @@ class TrainOptimization:
             consumption_start_index = consumption_start_index + interval_len
 
         total_emissions = sum(i['emission'] for i in selected_intervals)
-        transfer_on_run_emission = self.get_data_transfer_emission_during_run(year, month, selected_intervals,
+        transfer_on_run_emission, n_transfer = self.get_data_transfer_emission_during_run(year, month, selected_intervals,
                                                                               regions_emissions)
         upstream_data_transfer_emission, upstream_data_transfer_start_time = self.get_upstream_data_transfer_emissions(
             year, month,
@@ -270,7 +270,7 @@ class TrainOptimization:
             print(f"EMISSIONS\t ---> \t{total_emissions} C02eq would been emitted")
             print(f"STRATEGY DURATION\t ---> \t{self.strategy_duration(selected_intervals)}")
 
-        return selected_intervals, total_emissions + transfer_on_run_emission, total_emissions + upstream_data_transfer_emission
+        return selected_intervals, total_emissions + transfer_on_run_emission, total_emissions + upstream_data_transfer_emission, n_transfer
 
     def launcher(self, end_time, fts_run_duration, print_result=True):
         try:
@@ -340,6 +340,8 @@ class TrainOptimization:
             static_fts_reduction_on_run = []
             p_r_reduction = []
             fs_reduction = []
+            n_transf_s_fts = []
+            n_transf_f_fts = []
 
             for d in ref_days:
 
@@ -347,6 +349,7 @@ class TrainOptimization:
                 flexible_fts_emissions_on_run = []
                 static_fts_emissions_upstream = []
                 static_fts_emissions_on_run = []
+
                 p_r_emissions = []
                 fs_emissions = []
                 no_echo_mode = []
@@ -363,8 +366,10 @@ class TrainOptimization:
                                                                  start_time=start_t, run_duration=run_duration)
 
                     flexible_fts_emissions_upstream_transfer.append(fts_set_res[2])
+                    n_transf_f_fts.append(fts_set_res[3])
                     flexible_fts_emissions_on_run.append(fts_set_res[1])
                     static_fts_emissions_upstream.append(s_fts_res[2])
+                    n_transf_s_fts.append(s_fts_res[3])
                     static_fts_emissions_on_run.append(s_fts_res[1])
                     p_r_emissions.append(self.pause_and_resume(end_time=finish_hour, start_time=start_t,
                                                                emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
@@ -396,10 +401,10 @@ class TrainOptimization:
             avg_s_fts_on_run = np.average(np.asarray(static_fts_reduction_on_run))
             avg_p_r = np.average(np.asarray(p_r_reduction))
             avg_fs = np.average(np.asarray(fs_reduction))
-            fruits = ['flexible_fts_upstream',
-                      'flexible_fts_on_run',
-                      'static_fts_upstream',
-                      'static_fts_on_run',
+            fruits = ['f-fts upstream',
+                      'f-fts in-training',
+                      's-fts upstream',
+                      's-fts in-training',
                       'p&r',
                       'fs']
             counts = [avg_f_fts_up,
@@ -413,13 +418,41 @@ class TrainOptimization:
 
             ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
-            ax.set_ylabel('percentage reduction')
-            ax.set_title(f"Time-Wind:{t} Run duration:{run_duration}", fontsize=7)
-            plt.xticks(rotation=90, fontsize=7)
+            ax.set_ylabel('Percentage reduction')
+            ax.set_title(f"Hour parameter for time-window:{t} Checking-time:{run_duration}", fontsize=7)
+            plt.xticks(fontsize=9, rotation=45)
             plt.tight_layout()
+            self.bar_plot_n_transfer(s_fts_number_fts=n_transf_s_fts, f_fts_number_fts=n_transf_f_fts, run_duration=run_duration)
 
             plt.show()
             print("end graph")
+
+
+
+
+
+    def bar_plot_n_transfer(self, s_fts_number_fts, f_fts_number_fts, run_duration):
+        fig, ax = plt.subplots()
+
+        avg_f_fts_number = np.average(np.asarray(f_fts_number_fts))
+        avg_s_fts_number = np.average(np.asarray(s_fts_number_fts))
+
+        fruits = ['flexible fts', 'static fts']
+        counts = [avg_f_fts_number, avg_s_fts_number]
+        bar_labels = ['red', 'blue']
+        bar_colors = ['red', 'blue']
+
+        ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
+
+        ax.set_ylabel('Percentage reduction')
+        ax.set_title(f"Checking-time {run_duration}", fontsize=7)
+        plt.xticks(fontsize=7)
+        plt.tight_layout()
+
+        plt.show()
+        print("end graph")
+
+
 
     def compute_graphics(self, run_duration):
         end_windows_set = [6, 12, 18, 24]
@@ -475,8 +508,7 @@ class TrainOptimization:
         print('GRAPHIC COMPUTING')
 
         for end_t in ending_time_list:
-            flexible_fts_intervals, flexible_fts_emissions_on_run, flexible_fts_emissions_upstream_transfer = self.follow_the_sun_optimized(
-                end_time=end_t, run_duration=run_duration)
+            flexible_fts_intervals, flexible_fts_emissions_on_run, flexible_fts_emissions_upstream_transfer, _ = self.follow_the_sun_optimized(end_time=end_t, run_duration=run_duration)
             strategy_consumption['flexible_follow_the_sun_data_on_run']['emission'].append(
                 flexible_fts_emissions_on_run)
             strategy_consumption['flexible_follow_the_sun_data_on_run']['end_time'].append(end_t.split("+")[0])
@@ -490,7 +522,7 @@ class TrainOptimization:
             strategy_consumption['flexible_start']['emission'].append(flex_start_emission)
             strategy_consumption['flexible_start']['end_time'].append(end_t.split("+")[0])
 
-            static_start_fts_intervals, static_start_fts_emissions_on_run, static_start_fts_emissions_upstream_transfer = self.static_start_follow_the_sun(
+            static_start_fts_intervals, static_start_fts_emissions_on_run, static_start_fts_emissions_upstream_transfer, _ = self.static_start_follow_the_sun(
                 run_duration=run_duration)
             strategy_consumption['static_start_follow_the_sun_data_on_run']['emission'].append(
                 static_start_fts_emissions_on_run)
@@ -514,27 +546,27 @@ class TrainOptimization:
             strategy_consumption['no_echo_mode']['end_time'].append(end_t.split("+")[0])
 
             """ BAR PLOT REDUCTION """
-            self.bar_plot(no_echo_mode=no_echo_emission,
-                          flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
-                          flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
-                          static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
-                          static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
-                          flex_start_emission=flex_start_emission,
-                          p_r_emissions=p_r_emissions,
-                          title_param=f"{self.workload} for window end time {end_t}"
-                          )
+            # self.bar_plot(no_echo_mode=no_echo_emission,
+            #               flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
+            #               flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
+            #               static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
+            #               static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
+            #               flex_start_emission=flex_start_emission,
+            #               p_r_emissions=p_r_emissions,
+            #               title_param=f"{self.workload} for window end time {end_t}"
+            #               )
             """ TIMELINE  PLOT """
-            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
-                                static_start_fts_intervals=static_start_fts_intervals,
-                                flexible_start_start=flex_start_time,
-                                pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
+            # self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
+            #                     static_start_fts_intervals=static_start_fts_intervals,
+            #                     flexible_start_start=flex_start_time,
+            #                     pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
 
             """ REGION PLOT """
             self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t,
                               fts_version="flexible_fts")
             """ REGION PLOT """
-            self.region_graph(fts_method=static_start_fts_intervals, run_len=run_duration, ending_time=end_t,
-                              fts_version="static_fts")
+            # self.region_graph(fts_method=static_start_fts_intervals, run_len=run_duration, ending_time=end_t,
+            #                   fts_version="static_fts")
 
         line_w = 2.6
 

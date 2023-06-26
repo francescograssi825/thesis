@@ -4,6 +4,7 @@ import random
 from datetime import datetime, timedelta
 
 import numpy as np
+import pandas as pd
 
 import watt_time_controller
 
@@ -44,24 +45,38 @@ class ConsumptionAndEmissionsCsvUtils:
     def get_workload_energy_consumption_from_csv(workload: str):
         with open(f"csv_dir/{workload}_consumption.csv", 'r') as csv_consumption:
             dict_reader = csv.DictReader(csv_consumption)
-            return [{'timestamp': i['timestamp'],
-                     'cpu_energy_consumed': float(i['cpu_energy_consumed']),
-                     'gpu_energy_consumed': float(i['gpu_energy_consumed']),
-                     'ram_energy_consumed': float(i['ram_energy_consumed']),
-                     'total_consumption': float(i['total_consumption'])} for i in list(dict_reader)]
+            puntual_consumption = []
+            val_since_begin = list(dict_reader)
+            for c_begin in val_since_begin:
+                if val_since_begin.index(c_begin) == 0:
+                    i = c_begin
+                    puntual_consumption.append({'timestamp': i['timestamp'],
+                             'cpu_energy_consumed': float(i['cpu_energy_consumed']),
+                             'gpu_energy_consumed': float(i['gpu_energy_consumed']),
+                             'ram_energy_consumed': float(i['ram_energy_consumed']),
+                             'total_consumption': float(i['total_consumption'])})
+                else:
+                    i = c_begin
+                    j = val_since_begin[val_since_begin.index(c_begin)-1]
+                    puntual_consumption.append({'timestamp': i['timestamp'],
+                                                'cpu_energy_consumed': float(i['cpu_energy_consumed'])-float(j['cpu_energy_consumed']),
+                                                'gpu_energy_consumed': float(i['gpu_energy_consumed'])-float(j['gpu_energy_consumed']),
+                                                'ram_energy_consumed': float(i['ram_energy_consumed'])-float(j['ram_energy_consumed']),
+                                                'total_consumption': float(i['total_consumption'])-float(j['total_consumption'])})
+            return puntual_consumption
+
 
     def get_emissions_from_csv(self, file_path='', mode='list_of_dict'):
         file_path = file_path if file_path else self.reference_region[self.region_zone]["reference_path"]
 
         if self.region_zone == "other_regions":
-
-            with open(file_path, 'r') as csv_emission:
-                dict_reader = csv.DictReader(csv_emission)
-                if mode == 'list_of_dict':
-                    return list(dict_reader)
-                if mode == 'dict':
-                    return {row['timestamp']: float(row['MOER']) * (self.libs_to_grams / self.mega_to_kilowatt_hours)
-                            for row in dict_reader}
+            df = pd.read_csv(file_path)
+            mean_moer = df['MOER'].mean(skipna=True)
+            df = df.replace({'MOER': {0: mean_moer}})
+            final_dict = {}
+            for i in df.iterrows():
+                final_dict.update({i[1]['timestamp']: float(i[1]['MOER']) * (self.libs_to_grams / self.mega_to_kilowatt_hours)})
+            return final_dict
 
         elif self.region_zone == "italy":
             return self.from_electricity_map_to_wattTime(file_path)
