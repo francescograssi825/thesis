@@ -45,25 +45,21 @@ class ConsumptionAndEmissionsCsvUtils:
     def get_workload_energy_consumption_from_csv(workload: str):
         with open(f"csv_dir/{workload}_consumption.csv", 'r') as csv_consumption:
             dict_reader = csv.DictReader(csv_consumption)
-            puntual_consumption = []
-            val_since_begin = list(dict_reader)
-            for c_begin in val_since_begin:
-                if val_since_begin.index(c_begin) == 0:
-                    i = c_begin
-                    puntual_consumption.append({'timestamp': i['timestamp'],
-                             'cpu_energy_consumed': float(i['cpu_energy_consumed']),
-                             'gpu_energy_consumed': float(i['gpu_energy_consumed']),
-                             'ram_energy_consumed': float(i['ram_energy_consumed']),
-                             'total_consumption': float(i['total_consumption'])})
-                else:
-                    i = c_begin
-                    j = val_since_begin[val_since_begin.index(c_begin)-1]
-                    puntual_consumption.append({'timestamp': i['timestamp'],
-                                                'cpu_energy_consumed': float(i['cpu_energy_consumed'])-float(j['cpu_energy_consumed']),
-                                                'gpu_energy_consumed': float(i['gpu_energy_consumed'])-float(j['gpu_energy_consumed']),
-                                                'ram_energy_consumed': float(i['ram_energy_consumed'])-float(j['ram_energy_consumed']),
-                                                'total_consumption': float(i['total_consumption'])-float(j['total_consumption'])})
-            return puntual_consumption
+            consumptions_since_begin = list(dict_reader)
+            last_cons = {'cpu_energy_consumed': 0, 'gpu_energy_consumed': 0, 'ram_energy_consumed': 0,
+                         'total_consumption': 0}
+            total_consumption = []
+            for con in consumptions_since_begin:
+                total_consumption.append({
+                    'timestamp': con['timestamp'],
+                    'cpu_energy_consumed': float(con['cpu_energy_consumed']) - float(last_cons['cpu_energy_consumed']),
+                    'gpu_energy_consumed': float(con['gpu_energy_consumed']) - float(last_cons['gpu_energy_consumed']),
+                    'ram_energy_consumed': float(con['ram_energy_consumed']) - float(last_cons['ram_energy_consumed']),
+                    'total_consumption': float(con['total_consumption']) - float(last_cons['total_consumption'])})
+                last_cons = con
+
+            return total_consumption
+
 
 
     def get_emissions_from_csv(self, file_path='', mode='list_of_dict'):

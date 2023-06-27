@@ -87,6 +87,6 @@ def avarage_emissions_no_echo():
 
 
 if __name__ == "__main__":
-    avarage_emissions_no_echo()
-    #puntual_comparison(workload='isolation_forest')
+    #avarage_emissions_no_echo()
+    puntual_comparison(workload='isolation_forest')
     #avarage_reduction(workload='isolation_forest')
