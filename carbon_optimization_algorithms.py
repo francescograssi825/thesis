@@ -56,6 +56,7 @@ class TrainOptimization:
         emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emission_path)
         start_index = self.get_index_by_key(emissions, start_t)
         end_time_index = start_index + len(self.workload_energy)
+        delta = end_time_index -start_index
         total_emission = sum(i for i in np.multiply(self.consumption_values,
                                                     list(emissions.values())[start_index + 1:end_time_index + 1]))
         strategy_duration = datetime.strptime(
@@ -221,6 +222,7 @@ class TrainOptimization:
 
     def static_start_follow_the_sun(self, print_result=False, emissions_path='', start_time='', run_duration=5,
                                     month='01', year='2021'):
+        """ Compute emissions for static-start Follow the Sun """
         emissions = self.csv_utils.get_emissions_from_csv(mode='dict', file_path=emissions_path)
         start_t = start_time if start_time else self.start_time
         run_len = run_duration // 5
@@ -308,12 +310,12 @@ class TrainOptimization:
         flx_start = self.compute_percentage_decrease(no_echo_mode, flex_start_emission)
         p_and_r = self.compute_percentage_decrease(no_echo_mode, p_r_emissions)
 
-        fruits = ['flexible_fts_upstream',
-                  'flexible_fts_on_run',
-                  's_fts_upstream',
-                  's_fts_on_run',
-                  'flexible_start',
-                  'pause&resume']
+        fruits = ['f_fts_up',
+                  'f_fts_in',
+                  's_fts_up',
+                  's_fts_in',
+                  'fs',
+                  'p&r']
         counts = [fx_fts_up, fx_fts_on_run, s_fts_emissions_on_run, s_fts_emissions_upstream, flx_start, p_and_r]
         bar_labels = ['red', 'blue', 'yellow', 'orange', 'green', 'pink']
         bar_colors = ['red', 'blue', 'yellow', 'orange', 'green', 'pink']
@@ -321,11 +323,152 @@ class TrainOptimization:
         ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
         ax.set_ylabel('percentage reduction')
-        ax.set_title(f'Emission percentage reduction for {title_param}', fontsize=7)
-        plt.xticks(rotation=90, fontsize=7)
+        #ax.set_title(f'Emission percentage reduction for {title_param}', fontsize=7)
+        plt.xticks(rotation=45, fontsize=10)
         plt.tight_layout()
 
         plt.show()
+
+    def years_avarage_total_bar_plot(self, run_duration, years='2021', percentage=False):
+        print("Graph computing")
+        ref_days = ["01T00:00:00+00:00", "05T00:00:00+00:00", "10T00:00:00+00:00", "15T00:00:00+00:00",
+                    "20T00:00:00+00:00", "25T00:00:00+00:00"]
+        end_time_val = [24] if not percentage else [25, 50, 75, 100]
+        month_list = [1, 2, 3, 4, 6, 8, 10, 11]
+        #month_list = [1, 2]
+        f_fts_up = []
+        f_fts_in = []
+        s_fts_in = []
+        s_fts_up = []
+        pr = []
+        fs = []
+        number_static_fts = []
+        number_flexible_fts = []
+
+
+
+        for t in end_time_val:
+            print("Hour value:", t)
+            fts_reduction_upstream = []
+            fts_reduction_on_run = []
+            static_fts_reduction_upstream = []
+            static_fts_reduction_on_run = []
+            p_r_reduction = []
+            fs_reduction = []
+            n_transf_s_fts = []
+            n_transf_f_fts = []
+
+            for d in ref_days:
+
+                flexible_fts_emissions_upstream_transfer = []
+                flexible_fts_emissions_on_run = []
+                static_fts_emissions_upstream = []
+                static_fts_emissions_on_run = []
+
+                p_r_emissions = []
+                fs_emissions = []
+                no_echo_mode = []
+
+                for i in month_list:
+                    start_t = f"{years}-{str(i).zfill(2)}-{d}"
+                    finish_hour = self.csv_utils.get_date_for_intervals(start_t, (t * 60) + self.minimum_workload_len) if not percentage else self.csv_utils.get_date_for_intervals(start_t, round(math.ceil(
+                        self.minimum_workload_len * (t/100)) + self.minimum_workload_len,-1))
+
+                    fts_set_res = self.follow_the_sun_optimized(year=years, month=str(i).zfill(2), end_time=finish_hour,
+                                                                emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv",
+                                                                start_time=start_t, run_duration=run_duration)
+                    s_fts_res = self.static_start_follow_the_sun(year=years, month=str(i).zfill(2),
+                                                                 emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv",
+                                                                 start_time=start_t, run_duration=run_duration)
+
+                    flexible_fts_emissions_upstream_transfer.append(fts_set_res[2])
+                    n_transf_f_fts.append(fts_set_res[3])
+                    flexible_fts_emissions_on_run.append(fts_set_res[1])
+                    static_fts_emissions_upstream.append(s_fts_res[2])
+                    n_transf_s_fts.append(s_fts_res[3])
+                    static_fts_emissions_on_run.append(s_fts_res[1])
+                    p_r_emissions.append(self.pause_and_resume(end_time=finish_hour, start_time=start_t,
+                                                               emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                             1])
+                    fs_emissions.append(self.flexible_start(end_time=finish_hour, start_time=start_t,
+                                                            emissions_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                            1])
+
+                    no_echo_mode.append(self.no_echo_mode(start_time=start_t,
+                                                          emission_path=f"{self.csv_utils.reference_region['other_regions']['dir_historical']}_{years}-{str(i).zfill(2)}_MOER.csv")[
+                                            0])
+                    fts_reduction_upstream.append(self.compute_percentage_decrease(no_echo_mode[-1],
+                                                                                   flexible_fts_emissions_upstream_transfer[
+                                                                                       -1]))
+                    fts_reduction_on_run.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], flexible_fts_emissions_on_run[-1]))
+                    static_fts_reduction_upstream.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], static_fts_emissions_upstream[-1]))
+                    static_fts_reduction_on_run.append(
+                        self.compute_percentage_decrease(no_echo_mode[-1], static_fts_emissions_on_run[-1]))
+                    p_r_reduction.append(self.compute_percentage_decrease(no_echo_mode[-1], p_r_emissions[-1]))
+                    fs_reduction.append(self.compute_percentage_decrease(no_echo_mode[-1], fs_emissions[-1]))
+
+            f_fts_up.append(np.average(np.asarray(fts_reduction_upstream)))
+            f_fts_in.append(np.average(np.asarray(fts_reduction_on_run)))
+            s_fts_up.append(np.average(np.asarray(static_fts_reduction_upstream)))
+            s_fts_in.append(np.average(np.asarray(static_fts_reduction_on_run)))
+            pr.append(np.average(np.asarray(p_r_reduction)))
+            fs.append(np.average(np.asarray(fs_reduction)))
+
+            max_d = {self.workload: {
+                'f_fts_up': np.asarray(fts_reduction_upstream).min(),
+                'f_fts_in': np.asarray(fts_reduction_on_run).min(),
+                's_fts_up': np.asarray(static_fts_reduction_upstream).min(),
+                's_fts_in': np.asarray(static_fts_reduction_on_run).min(),
+                'pr': np.asarray(p_r_reduction).min(),
+                'fs': np.asarray(fs_reduction).min()
+            }}
+
+            print(max_d)
+
+            number_static_fts.append(np.average(np.asarray(n_transf_s_fts)))
+            number_flexible_fts.append(np.average(np.asarray(n_transf_f_fts)))
+        print("plotting..")
+
+
+        bars1 = f_fts_up
+        bars2 = f_fts_in
+        bars3 = s_fts_up
+        bars4 = s_fts_in
+        bars5 = pr
+        bars6 = fs
+
+        barWidth = 0.30
+        # Set position of bar on X axis
+        r1 = np.arange(len(bars1))
+        r2 = [x + barWidth for x in r1]
+        r3 = [x + barWidth for x in r2]
+        r4 = [x + barWidth for x in r3]
+        r5 = [x + barWidth for x in r4]
+        r6 = [x + barWidth for x in r5]
+
+        # Make the plot
+        plt.bar(r1, bars1, color="#fd7f6f", width=barWidth, edgecolor='white', label='f_fts_up')
+        plt.bar(r2, bars2, color="#7eb0d5", width=barWidth, edgecolor='white', label='f_fts_in')
+        plt.bar(r3, bars3, color="#b2e061", width=barWidth, edgecolor='white', label='s_fts_up')
+        plt.bar(r4, bars4, color="#bd7ebe", width=barWidth, edgecolor='white', label='s_fts_in')
+        plt.bar(r5, bars5, color="#ffb55a", width=barWidth, edgecolor='white', label='p&r')
+        plt.bar(r6, bars6, color="#ffee65", width=barWidth, edgecolor='white', label='fs')
+
+        plt.xlabel('time window parameter', fontsize=10)
+        plt.ylabel('reduction percentage', fontsize=10)
+        plt.title(label=f'Checking-time {run_duration}', fontsize=10)
+        plt.xticks([r + barWidth for r in range(len(bars1))], end_time_val)
+
+        # Create legend & Show graphic
+        plt.legend()
+        plt.show()
+
+        self.bar_plot_n_transfer_pretty(s_fts_number_fts=number_static_fts, f_fts_number_fts=number_flexible_fts,
+                                 run_duration=run_duration, end_time_val=end_time_val)
+
+        print("end graph")
 
     def years_avarage_reduction_bar_plot(self, run_duration, years='2021'):
         print("Graph computing")
@@ -333,6 +476,8 @@ class TrainOptimization:
                     "20T00:00:00+00:00", "25T00:00:00+00:00"]
         end_time_val = [6, 12, 18, 24]
         month_list = [1, 2, 3, 4, 6, 8, 10, 11]
+
+
         for t in end_time_val:
             fts_reduction_upstream = []
             fts_reduction_on_run = []
@@ -419,8 +564,8 @@ class TrainOptimization:
             ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
             ax.set_ylabel('Percentage reduction')
-            ax.set_title(f"Hour parameter for time-window:{t} Checking-time:{run_duration}", fontsize=7)
-            plt.xticks(fontsize=9, rotation=45)
+            ax.set_title(f"Hour parameter for time-window:{t} Checking-time:{run_duration}", fontsize=10)
+            plt.xticks(fontsize=10, rotation=45, )
             plt.tight_layout()
             self.bar_plot_n_transfer(s_fts_number_fts=n_transf_s_fts, f_fts_number_fts=n_transf_f_fts, run_duration=run_duration)
 
@@ -445,17 +590,47 @@ class TrainOptimization:
         ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
         ax.set_ylabel('Percentage reduction')
-        ax.set_title(f"Checking-time {run_duration}", fontsize=7)
-        plt.xticks(fontsize=7)
+        ax.set_title(f"Checking-time {run_duration}", fontsize=10)
+        plt.xticks(fontsize=10)
         plt.tight_layout()
 
         plt.show()
         print("end graph")
 
+    def bar_plot_n_transfer_pretty(self, s_fts_number_fts, f_fts_number_fts, end_time_val, run_duration):
+        barWidth = 0.25
+
+        # set heights of bars
+        bars1 = s_fts_number_fts
+        bars2 = f_fts_number_fts
+
+
+        # Set position of bar on X axis
+        r1 = np.arange(len(bars1))
+        r2 = [x + barWidth for x in r1]
+
+
+        # Make the plot
+        plt.bar(r1, bars1, color='#7f6d5f', width=barWidth, edgecolor='white', label='static_fts')
+        plt.bar(r2, bars2, color='#557f2d', width=barWidth, edgecolor='white', label='flexible_fts')
+
+
+        # Add xticks on the middle of the group bars
+        plt.xlabel('time window parameters', fontsize=10)
+        plt.ylabel('number of region switch', fontsize=10)
+        plt.xticks([r + barWidth for r in range(len(bars1))], end_time_val)
+
+        # Create legend & Show graphic
+        plt.legend()
+        plt.title(label=f'Checking-time {run_duration}', fontsize=10)
+        plt.show()
+
+
 
 
     def compute_graphics(self, run_duration):
-        end_windows_set = [6, 12, 18, 24]
+        #end_windows_set = [6, 12, 18, 24]
+        end_windows_set = [24]
         ending_time_list = []
         for t in end_windows_set:
             ending_time_list.append(
@@ -546,27 +721,27 @@ class TrainOptimization:
             strategy_consumption['no_echo_mode']['end_time'].append(end_t.split("+")[0])
 
             """ BAR PLOT REDUCTION """
-            # self.bar_plot(no_echo_mode=no_echo_emission,
-            #               flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
-            #               flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
-            #               static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
-            #               static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
-            #               flex_start_emission=flex_start_emission,
-            #               p_r_emissions=p_r_emissions,
-            #               title_param=f"{self.workload} for window end time {end_t}"
-            #               )
+            self.bar_plot(no_echo_mode=no_echo_emission,
+                          flexible_fts_emissions_on_run=flexible_fts_emissions_on_run,
+                          flexible_fts_emissions_upstream_transfer=flexible_fts_emissions_upstream_transfer,
+                          static_start_fts_emissions_on_run=static_start_fts_emissions_on_run,
+                          static_start_fts_emissions_upstream_transfer=static_start_fts_emissions_upstream_transfer,
+                          flex_start_emission=flex_start_emission,
+                          p_r_emissions=p_r_emissions,
+                          title_param=f"{self.workload} for window end time {end_t}"
+                          )
             """ TIMELINE  PLOT """
-            # self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
-            #                     static_start_fts_intervals=static_start_fts_intervals,
-            #                     flexible_start_start=flex_start_time,
-            #                     pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
+            self.timeline_graph(flexible_fts_intervals=flexible_fts_intervals,
+                                static_start_fts_intervals=static_start_fts_intervals,
+                                flexible_start_start=flex_start_time,
+                                pause_resume_intervals=p_r_intervals, run_len=run_duration, ending_time=end_t)
 
             """ REGION PLOT """
             self.region_graph(fts_method=flexible_fts_intervals, run_len=run_duration, ending_time=end_t,
                               fts_version="flexible_fts")
             """ REGION PLOT """
-            # self.region_graph(fts_method=static_start_fts_intervals, run_len=run_duration, ending_time=end_t,
-            #                   fts_version="static_fts")
+            self.region_graph(fts_method=static_start_fts_intervals, run_len=run_duration, ending_time=end_t,
+                              fts_version="static_fts")
 
         line_w = 2.6
 
@@ -659,14 +834,14 @@ class TrainOptimization:
         ax.broken_barh(fs_list, (40, 9), facecolors='tab:red')
         ax.set_ylim(5, 50)
 
-        plt.xticks(ticks=timestamp_list, labels=date_list, fontsize=7, rotation=90)
+        plt.xticks(ticks=timestamp_list, labels=date_list, fontsize=9, rotation=90)
         ax.set_xlabel('time')
         ax.set_yticks([15, 25, 35, 45],
-                      labels=['flexible_fts', 'static_start_fts', 'plt&r', 'fs'])  # Modify y-axis tick labels
+                      labels=['f_fts', 's_fts', 'p&r', 'fs'])  # Modify y-axis tick labels
         ax.grid(True)  # Make grid lines visible
-        plt.title(
-            f"{self.workload}, fts-run-duration {run_len} min, window-ending time {ending_time}",
-            fontsize=7)
+        #plt.title(
+         #   f"{self.workload}, fts-run-duration {run_len} min, window-ending time {ending_time}",
+          #  fontsize=7)
         plt.tight_layout()
         plt.show()
 
@@ -701,9 +876,9 @@ class TrainOptimization:
         ax.set_yticks([15 + (i * 10) for i in range(0, len(fts_method_list_set))],
                       labels=[i.replace('.csv', '') for i in fts_method_list_set])  # Modify y-axis tick labels
         ax.grid(True)  # Make grid lines visible
-        plt.title(
-            f"{self.workload}, {fts_version}-run-duration {run_len} min, window-ending time {ending_time}",
-            fontsize=7)
+        # plt.title(
+        #     f"{self.workload}, {fts_version}-run-duration {run_len} min, window-ending time {ending_time}",
+        #     fontsize=7)
         plt.tight_layout()
         plt.show()
 

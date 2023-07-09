@@ -8,7 +8,8 @@ from consumption_and_emissions_csv_utils import ConsumptionAndEmissionsCsvUtils
 
 def puntual_comparison(workload):
     test_op = TrainOptimization(start_time='2021-01-15T00:00:00+00:00', workload=workload, region_zone="other_regions")
-    run_len_set = [15, 30, 60, 120]
+    #run_len_set = [15, 30, 60, 120]
+    run_len_set = [15]
     for run_set in run_len_set:
         test_op.compute_graphics(run_set)
 
@@ -19,12 +20,20 @@ def avarage_reduction(workload):
                                 region_zone="other_regions")
     for r in run_len:
         test_op.years_avarage_reduction_bar_plot(run_duration=r, years="2021")
+def avarage_emission_reduction_pretty(workload, percentage):
+    #run_len = [15, 30, 60, 120]
+    run_len = [120]
 
+    test_op = TrainOptimization(start_time='2021-01-15T00:00:00+00:00', workload=workload,
+                                region_zone="other_regions")
+    for r in run_len:
+        test_op.years_avarage_total_bar_plot(run_duration=r, years="2021", percentage=percentage)
 
 def avarage_emissions_no_echo():
     print("Graph computing")
     csv_obj = ConsumptionAndEmissionsCsvUtils("other_region")
     algo = ['isolation_forest', 'svm', 'hf_sca', 'autoencoder']
+    #algo = ['hf_sca']
     alg_emissions = {i: {} for i in algo}
     areas = csv_obj.list_all_area_wattTime()
     month_list = ['01', '02', '03', '04', '06', '08', '10', '11']
@@ -87,6 +96,14 @@ def avarage_emissions_no_echo():
 
 
 if __name__ == "__main__":
+    #puntual_comparison("hf_sca")
     #avarage_emissions_no_echo()
-    puntual_comparison(workload='isolation_forest')
+    #puntual_comparison(workload='isolation_forest')
     #avarage_reduction(workload='isolation_forest')
+    #avarage_emission_reduction_pretty('hf_sca', percentage=False)
+
+    # avarage_emission_reduction_pretty('autoencoder', percentage=False)
+    # avarage_emission_reduction_pretty('isolation_forest', percentage=False)
+    avarage_emission_reduction_pretty('svm', percentage=False)
+
+    #avarage_emission_reduction_pretty('autoencoder', percentage=True)
